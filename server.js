@@ -3,7 +3,8 @@ const mongoose = require('mongoose')
 const cors = require('cors')
 require('dotenv').config()
 
-const usuariosRoutes = require('./routes/usuario.route')
+const usuariosRoutes = require('./routes/usuario.routes')
+const cajasRoutes = require('./routes/cajas.routes')
 
 const leitnerApp = express()
 const port = process.env.PORT || 3000
@@ -12,6 +13,7 @@ leitnerApp.use(cors())
 leitnerApp.use(express.json())
 
 leitnerApp.use('/api/usuarios', usuariosRoutes)
+leitnerApp.use('/api/cajas', cajasRoutes)
 
 mongoose.connect(process.env.MONGO_URI, {
     useNewUrlParser: true,

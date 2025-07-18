@@ -13,8 +13,18 @@ const registrarUsuario = async (req, res) => {
 
         const salt = await bcrypt.genSalt(10)
         const passEncriptada = await bcrypt.hash(password, salt)
+        const cajas = Array.from({ length: 5 }, (_, i) => ({
+            nombre: `Caja ${i + 1}`,
+            tarjetas: []
+        }))
 
-        const nuevoUsuario = new Usuario({ nombre, email, password: passEncriptada })
+        const nuevoUsuario = new Usuario({
+            nombre, 
+            email, 
+            password: passEncriptada,
+            cajas
+        })
+
         await nuevoUsuario.save()
 
         res.status(201).json({ mensaje: "Usuario registrado con éxito" })
