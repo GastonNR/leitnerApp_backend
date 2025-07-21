@@ -52,4 +52,34 @@ const cargarTarjetas = async (req, res) => {
     }
 }
 
-module.exports = { crearTarjeta, cargarTarjetas }
+const actualizarCajas = async (req, res) => {
+    console.log(req.body[0].tarjetas)
+    const id = req.params.id
+    const datos = req.body
+
+    try {
+        const cajasActualizadas = await Usuario.findByIdAndUpdate(
+            id,
+            {
+                $set: {
+                    cajas: datos
+                }
+            },
+            {
+                new: true,
+                runValidators:true
+            }
+        )
+        if(!cajasActualizadas) {
+            return res.status(404).json({ mensaje: "NO se ha podido actualizar las cajas"})
+        }
+        //res.json(cajasActualizadas)
+    } catch (error) {
+        console.error("Error al actualizar los datos: ", error)
+        res.status(500).json({ mensaje: "Error interno al actualizar" })
+    }
+
+
+}
+
+module.exports = { crearTarjeta, cargarTarjetas, actualizarCajas }
