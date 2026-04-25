@@ -1,5 +1,5 @@
-const mongoose = require('mongoose')
-const LeccionSchema = require('./Leccion')
+import mongoose from 'mongoose'
+import LeccionSchema from './Leccion.js'
 
 const usuarioSchema = new mongoose.Schema({
     nombre: { type: String, require: true },
@@ -11,4 +11,4 @@ const usuarioSchema = new mongoose.Schema({
     }
 })
 
-module.exports = mongoose.model('Usuario', usuarioSchema)
+export default mongoose.model('Usuario', usuarioSchema)

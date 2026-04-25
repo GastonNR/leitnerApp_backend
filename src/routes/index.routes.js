@@ -1,6 +1,6 @@
 import { Router } from "express"
-import user_routes from './usuario.routes'
-import lection_routes from './lecciones.routes'
+import user_routes from './usuario.routes.js'
+import lection_routes from './lecciones.routes.js'
 
 const routes = Router()
 

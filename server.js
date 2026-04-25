@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import leitnerApp from '../app.js'
+import leitnerApp from './src/app.js'
 import connectDB from './src/config/connectionDB.js'
 import env from './src/config/env.js'
 

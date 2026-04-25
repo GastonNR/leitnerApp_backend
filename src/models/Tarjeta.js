@@ -1,4 +1,4 @@
-const mongoose = require('mongoose')
+import mongoose from "mongoose"
 
 const TarjetaSchema = new mongoose.Schema({
     pregunta: { type: String, required: true },
@@ -10,4 +10,4 @@ const TarjetaSchema = new mongoose.Schema({
 
 })
 
-module.exports = TarjetaSchema
+export default TarjetaSchema

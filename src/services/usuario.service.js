@@ -1,12 +1,13 @@
-import Usuarios from '../models/Usuarios'
+import Usuario from '../models/Usuarios.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 
 async function registrar(usuario) {
+
     try {
         const { nombre, email, password } = usuario
 
-        const usuarioExistente = await Usuarios.findOne({ email })
+        const usuarioExistente = await Usuario.findOne({ email })
 
         if (usuarioExistente) {
             throw new Error("El usuario ya existe")

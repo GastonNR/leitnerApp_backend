@@ -1,9 +1,9 @@
-const mongoose = require('mongoose')
-const TarjetaSchema = require('./Tarjeta')
+import mongoose from 'mongoose'
+import TarjetaSchema from './Tarjeta.js'
 
 const CajaSchema = new mongoose.Schema({
     nombre: { type: String, required: true },
     tarjetas: [TarjetaSchema]
 })
 
-module.exports = CajaSchema
+export default CajaSchema

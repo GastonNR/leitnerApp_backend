@@ -1,4 +1,4 @@
-const Usuario = require("../src/models/Usuarios")
+import Usuarios from "../models/Usuarios.js"
 
 // Genera 5 cajas vacías con los nombres estándar del sistema Leitner
 function crearCajasVacias() {
@@ -152,7 +152,7 @@ const crearTarjeta = async (req, res) => {
     }
 }
 
-module.exports = {
+export {
     cargarLecciones,
     cargarCajasDeLeccion,
     crearLeccion,

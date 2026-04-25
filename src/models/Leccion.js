@@ -1,5 +1,5 @@
-const mongoose = require('mongoose')
-const CajaSchema = require('./Cajas')
+import mongoose from 'mongoose'
+import CajaSchema from './Cajas.js'
 
 function cajasValidas(val) {
     return val.length === 5
@@ -13,4 +13,4 @@ const LeccionSchema = new mongoose.Schema({
     }
 })
 
-module.exports = LeccionSchema
+export default LeccionSchema
