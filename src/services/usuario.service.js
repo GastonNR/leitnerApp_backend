@@ -44,10 +44,19 @@ async function logear( credenciales ) {
 
     try {
         const usuario = await Usuario.findOne({ email })
-        if (!usuario) return res.status(404).json({ message: "usuario no encontrado" })
+
+        if (!usuario) {
+            const error = new Error("Usuario no encontrado.")
+            error.status = 404
+            throw error
+        }
 
         const esCorrectaPass = await bcrypt.compare(password, usuario.password)
-        if (!esCorrectaPass) return res.status(401).json({ message: "Contraseña incorrecta" })
+        if (!esCorrectaPass) {
+            const error = new Error("Contraseña incorrecta.")
+            error.status = 401
+            throw error
+        }
 
         const token = jwt.sign(
             { id: usuario._id, email: usuario.email },
@@ -55,11 +64,17 @@ async function logear( credenciales ) {
             { expiresIn: "2h" }
         )
 
-        res.status(200).json({ token, usuario: { id: usuario._id, nombre: usuario.nombre } })
+        return {
+            token,
+            usuario: {
+                id: usuario._id,
+                nombre: usuario.nombre
+            }
+        }
 
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ message: "Error en el servidor" })
+        throw new Error("Error en el servidor")
+        
     }
 
 }
