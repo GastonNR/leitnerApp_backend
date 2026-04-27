@@ -3,14 +3,13 @@ import verificarToken from '../middleware/verificarToken.js'
 import {
     cargarLecciones, // => Se realiza al comienzo cuando el usuario se logea. Se carga el usuariojunto con sus lecciones
     //cargarCajasDeLeccion,
-    crearLeccion, // => Se realiza cuándo el usario clickea el botón de "Crear lección" en la ventana modal del frontend.
+    crearLeccion, // => Se realiza cuándo el usario clickea el botón de "Crear lección" en la ventana modal del frontend. 
     actualizarCajasDeLeccion, // => Se usa con el botón "Guardar" del header.
     eliminarLeccion, // => Se usa con el botón de eliminar en la ventana modal del frontend.
     //crearTarjeta, // => Se usa con el botón de "Crear tarjeta" en el aside.
-} from '../controllers/tarjeta.controller.js'
+} from '../controllers/lecciones.controller.js'
 
 const lection_routes = Router()
-
 
 // Lecciones
 lection_routes.get('/', verificarToken, cargarLecciones)

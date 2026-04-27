@@ -25,7 +25,7 @@ async function registrar(usuario) {
             nombre,
             email,
             password: passEncriptada,
-            lecciones: [{ nombre: 'Mi primera leccion', cajas: cajasVacias }]
+            //lecciones: [{ nombre: 'Mi primera leccion', cajas: cajasVacias }]
         })
 
         await nuevoUsuario.save()

@@ -13,4 +13,5 @@ const LeccionSchema = new mongoose.Schema({
     }
 })
 
-export default LeccionSchema
+export {LeccionSchema}
+export default mongoose.model('Leccion', LeccionSchema)

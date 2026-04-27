@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import LeccionSchema from './Leccion.js'
+import { LeccionSchema } from './Leccion.js'
 
 const usuarioSchema = new mongoose.Schema({
     nombre: { type: String, require: true },

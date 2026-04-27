@@ -1,15 +1,5 @@
-import Usuarios from "../models/Usuarios.js"
-
-// Genera 5 cajas vacías con los nombres estándar del sistema Leitner
-function crearCajasVacias() {
-    return [
-        { nombre: "Caja 1", tarjetas: [] },
-        { nombre: "Caja 2", tarjetas: [] },
-        { nombre: "Caja 3", tarjetas: [] },
-        { nombre: "Caja 4", tarjetas: [] },
-        { nombre: "Caja 5", tarjetas: [] },
-    ]
-}
+import Usuario from "../models/Usuarios.js"
+import { crearLeccionDB } from "../services/lecciones.service.js"
 
 // GET /api/cajas/
 // Retorna todas las lecciones del usuario
@@ -47,36 +37,35 @@ const cargarCajasDeLeccion = async (req, res) => {
 // POST /api/cajas/leccion
 // Crea una nueva lección con 5 cajas vacías
 const crearLeccion = async (req, res) => {
-    const { nombre } = req.body
-    if (!nombre || !nombre.trim()) {
+
+    console.log("req.usuario", req.usuario)
+    console.log("Body: ", req.body.nuevaLeccion)
+
+    const nombreLeccion = req.body.nuevaLeccion
+    const usuario_id = req.usuario.id
+
+    if (!nombreLeccion || !nombreLeccion.trim()) {
         return res.status(400).json({ mensaje: "El nombre de la lección es requerido" })
     }
 
     try {
-        const usuario = await Usuario.findById(req.usuario.id)
-        if (!usuario) return res.status(404).json({ mensaje: "Usuario no encontrado" })
-
-        const nombreDuplicado = usuario.lecciones.some(
-            l => l.nombre.toLowerCase() === nombre.trim().toLowerCase()
-        )
-        if (nombreDuplicado) {
-            return res.status(409).json({ mensaje: "Ya existe una lección con ese nombre" })
-        }
-
-        const nuevaLeccion = {
-            nombre: nombre.trim(),
-            cajas: crearCajasVacias()
-        }
-
-        usuario.lecciones.push(nuevaLeccion)
-        await usuario.save()
-
-        const leccionGuardada = usuario.lecciones[usuario.lecciones.length - 1]
+        const leccionGuardada = await crearLeccionDB(nombreLeccion, usuario_id)
         return res.status(201).json(leccionGuardada)
+
     } catch (error) {
-        console.error("Error al crear lección:", error)
-        return res.status(500).json({ mensaje: "Error interno al crear la lección" })
+        
+        if (error.message === "Ya existe una lección con ese nombre") {
+            return res.status(409).json({ mensaje: error.message })
+        }
+
+        if (error.message === "Usuario no encontrado") {
+            return res.status(404).json({ mensaje: error.message })
+        }
+
+        console.error(error)
+        return res.status(500).json({ mensaje: "Error interno del servidor."})
     }
+
 }
 
 // PUT /api/cajas/leccion/:leccionId
