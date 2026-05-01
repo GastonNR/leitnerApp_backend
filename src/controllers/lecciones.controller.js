@@ -1,15 +1,17 @@
 import Usuario from "../models/Usuarios.js"
-import { crearLeccionDB } from "../services/lecciones.service.js"
+import { crearLeccionDB, deleteLeccionService, traerLeccionesUsuario } from "../services/lecciones.service.js"
 
 // GET /api/cajas/
 // Retorna todas las lecciones del usuario
 const cargarLecciones = async (req, res) => {
+
+    console.log("req.usuario.id: ", req.usuario.id)
     
     try {
-        const usuario = await Usuario.findById(req.usuario.id)
-        if (!usuario) return res.status(404).json({ mensaje: "Usuario no encontrado" })
+        const lecciones = await traerLeccionesUsuario(req.usuario.id)
+        if (!lecciones) return res.status(404).json({ mensaje: "Usuario no encontrado" })
 
-        return res.status(200).json(usuario.lecciones)
+        return res.status(200).json(lecciones)
 
     } catch (error) {
         console.error('Error al cargar lecciones:', error)
@@ -98,22 +100,21 @@ const actualizarCajasDeLeccion = async (req, res) => {
 // DELETE /api/cajas/leccion/:leccionId
 // Elimina una lección completa
 const eliminarLeccion = async (req, res) => {
-    const { leccionId } = req.params
+
+    const { id } = req.params
+    const usuario_id  = req.usuario.id
+
+    console.log("id: ", id)
 
     try {
-        const usuario = await Usuario.findById(req.usuario.id)
-        if (!usuario) return res.status(404).json({ mensaje: "Usuario no encontrado" })
-
-        const leccion = usuario.lecciones.id(leccionId)
-        if (!leccion) return res.status(404).json({ mensaje: "Lección no encontrada" })
-
-        leccion.deleteOne()
-        await usuario.save()
+        await deleteLeccionService(usuario_id, id)
 
         return res.status(200).json({ mensaje: "Lección eliminada correctamente" })
+
     } catch (error) {
         console.error("Error al eliminar lección:", error)
         return res.status(500).json({ mensaje: "Error interno al eliminar" })
+
     }
 }
 

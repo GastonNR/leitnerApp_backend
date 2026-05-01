@@ -15,8 +15,8 @@ const lection_routes = Router()
 lection_routes.get('/', verificarToken, cargarLecciones)
 lection_routes.post('/leccion', verificarToken, crearLeccion)
 //lection_routes.get('/leccion/:leccionId', verificarToken, cargarCajasDeLeccion)
-lection_routes.put('/leccion/:leccionId', verificarToken, actualizarCajasDeLeccion)
-lection_routes.delete('/leccion/:leccionId', verificarToken, eliminarLeccion)
+lection_routes.put('/leccion/:id', verificarToken, actualizarCajasDeLeccion)
+lection_routes.delete('/:id', verificarToken, eliminarLeccion)
 
 // Tarjetas
 //lection_routes.post('/leccion/:leccionId/tarjeta', verificarToken, crearTarjeta)

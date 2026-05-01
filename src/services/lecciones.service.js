@@ -1,3 +1,4 @@
+import { eliminarLeccion } from "../controllers/lecciones.controller.js"
 import Leccion from "../models/Leccion.js"
 import Usuario from "../models/Usuarios.js"
 
@@ -12,11 +13,11 @@ function crearCajasVacias() {
 }
 
 export const crearLeccionDB = async (nombreLeccion, usuario_id) => {
-    
+
     try {
         const usuario = await Usuario.findById(usuario_id)
         if (!usuario) throw new Error("Usuario no encontrado")
-        
+
         const nombreDuplicado = usuario.lecciones.some(
             l => l.nombre.toLowerCase() === nombreLeccion.trim().toLowerCase()
         )
@@ -33,10 +34,47 @@ export const crearLeccionDB = async (nombreLeccion, usuario_id) => {
         usuario.lecciones.push(nuevaLeccion)
         await usuario.save()
 
-        return usuario.lecciones[usuario.lecciones.length -1 ]
+        return usuario.lecciones[usuario.lecciones.length - 1]
 
     } catch (error) {
         throw error
+
+    }
+
+}
+
+export const traerLeccionesUsuario = async (usuario_id) => {
+    try {
+        const usuario = await Usuario.findById(usuario_id)
+        if (!usuario) throw new Error("Usuario no encontrado")
+
+        console.log("Lecciones del usuario encontradas desde el service: ", usuario.lecciones)
+
+        return usuario.lecciones
+
+    } catch (error) {
+
+        throw new Error(`Error al cargar las lecciones del usuario: ${error}`)
+    }
+}
+
+export const deleteLeccionService = async (usuario_id, leccion_id) => {
+
+    try {
+        const usuario = await Usuario.findById(usuario_id)
+        if (!usuario) throw new Error("Usuario no encontrado")
+
+        const leccion = usuario.lecciones.id(leccion_id)
+
+        if (!leccion) throw new Error("Lección no encontrada.")
+
+        await leccion.deleteOne()
+        await usuario.save()
+
+        return { mensaje: "Lección eliminada correctamente" }
+
+    } catch (error) {
+        throw new Error("Error al eliminar la lección: " + error.message)
 
     }
 
