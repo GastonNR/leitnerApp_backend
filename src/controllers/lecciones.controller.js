@@ -1,5 +1,5 @@
 import Usuario from "../models/Usuarios.js"
-import { crearLeccionDB, deleteLeccionService, traerLeccionesUsuario } from "../services/lecciones.service.js"
+import { crearLeccionDB, createCardService, deleteLeccionService, traerLeccionesUsuario } from "../services/lecciones.service.js"
 
 // GET /api/cajas/
 // Retorna todas las lecciones del usuario
@@ -121,24 +121,15 @@ const eliminarLeccion = async (req, res) => {
 // POST /api/cajas/leccion/:leccionId/tarjeta
 // Agrega una tarjeta nueva a la caja 1 de una lección
 const crearTarjeta = async (req, res) => {
-    const { pregunta, respuesta, nivel, ultima_revision, proxima_revision } = req.body
-    const { leccionId } = req.params
 
     try {
-        const usuario = await Usuario.findById(req.usuario.id)
-        if (!usuario) return res.status(404).json({ mensaje: "Usuario no encontrado" })
-
-        const leccion = usuario.lecciones.id(leccionId)
-        if (!leccion) return res.status(404).json({ mensaje: "Lección no encontrada" })
-
-        const nuevaTarjeta = { pregunta, respuesta, nivel, ultima_revision, proxima_revision }
-        leccion.cajas[0].tarjetas.push(nuevaTarjeta)
-
-        await usuario.save()
+        const tarjetaGuardada = await createCardService(req.usuario_id, req.params, req.body)
         return res.status(200).json({ mensaje: "Tarjeta agregada correctamente" })
+
     } catch (error) {
         console.error(error)
         return res.status(500).json({ mensaje: "Error en el servidor" })
+
     }
 }
 
