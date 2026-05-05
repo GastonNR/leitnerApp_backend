@@ -122,9 +122,25 @@ const eliminarLeccion = async (req, res) => {
 // Agrega una tarjeta nueva a la caja 1 de una lección
 const crearTarjeta = async (req, res) => {
 
+    const usuario_id = req.usuario.id
+    const {leccion_id} = req.params
+    const {pregunta, respuesta} = req.body
+    const datos_tarjeta = {
+        pregunta: pregunta,
+        respuesta: respuesta
+    }
+
+    console.log("usuario id desde request: ", req.usuario.id)
+    console.log("Datos de la targeta: ", pregunta, respuesta)
+
     try {
-        const tarjetaGuardada = await createCardService(req.usuario_id, req.params, req.body)
-        return res.status(200).json({ mensaje: "Tarjeta agregada correctamente" })
+        const tarjetaGuardada = await createCardService(
+            usuario_id,
+            leccion_id,
+            datos_tarjeta
+        )
+
+        return res.status(200).json(tarjetaGuardada)
 
     } catch (error) {
         console.error(error)

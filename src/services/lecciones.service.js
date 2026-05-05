@@ -82,30 +82,35 @@ export const deleteLeccionService = async (usuario_id, leccion_id) => {
 
 export const createCardService = async (usuario_id, leccion_id, tarjeta_datos) => {
 
-    const { pregunta, respuesta, nivel, ultima_revision, proxima_revision } = tarjeta_datos
+    const { pregunta, respuesta } = tarjeta_datos
+    console.log("Usuario id: ", usuario_id)
+    console.log("leccion id: ", leccion_id)
+    console.log("Datos de tarjeta en el service: ", tarjeta_datos)
     
     try {
         const usuario = await Usuario.findById(usuario_id)
         if (!usuario) throw new Error("Usuario no encontrado.")
         
-        const leccion = usuario.lecciones._id(leccion_id)
+        const leccion = usuario.lecciones.id(leccion_id)
         if(!leccion) throw new Error("Lección no encontrada.")
 
         const nuevaTarjeta = {
-            pregunta,
-            respuesta,
-            nivel,
-            ultima_revision,
-            proxima_revision
+            pregunta: pregunta,
+            respuesta: respuesta,
+            nivel: 1,
+            ultima_revision: new Date(),
+            proxima_revision: new Date(Date.now())
         }
 
         leccion.cajas[0].tarjetas.push(nuevaTarjeta)
 
-        await Usuario.save()
-        return usuario.lecciones.tarjetas[usuario.lecciones.tarjetas.length - 1]
+        await usuario.save()
+        const tarjetas = leccion.cajas[0].tarjetas
+        return tarjetas[tarjetas.length - 1]
 
     } catch (error) {
         throw new Error("Error al guardar la tarjeta", error)
         
     }
+
 }

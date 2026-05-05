@@ -19,6 +19,6 @@ lection_routes.put('/leccion/:id', verificarToken, actualizarCajasDeLeccion)
 lection_routes.delete('/:id', verificarToken, eliminarLeccion)
 
 // Tarjetas
-lection_routes.post('/leccion/:leccionId/tarjeta', verificarToken, crearTarjeta)
+lection_routes.post('/leccion/:leccion_id', verificarToken, crearTarjeta)
 
 export default lection_routes
