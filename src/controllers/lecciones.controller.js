@@ -1,7 +1,7 @@
 import Usuario from "../models/Usuarios.js"
-import { crearLeccionDB, createCardService, deleteLeccionService, traerLeccionesUsuario } from "../services/lecciones.service.js"
+import { crearLeccionDB, createCardService, deleteLeccionService, traerLeccionesUsuario, updateBoxesService } from "../services/lecciones.service.js"
 
-// GET /api/cajas/
+// GET /api/lecciones/
 // Retorna todas las lecciones del usuario
 const cargarLecciones = async (req, res) => {
 
@@ -19,7 +19,7 @@ const cargarLecciones = async (req, res) => {
     }
 }
 
-// GET /api/cajas/leccion/:leccionId
+// GET /api/lecciones/leccion/:leccionId
 // Retorna las cajas de una lección específica
 const cargarCajasDeLeccion = async (req, res) => {
     try {
@@ -36,7 +36,7 @@ const cargarCajasDeLeccion = async (req, res) => {
     }
 }
 
-// POST /api/cajas/leccion
+// POST /api/lecciones/leccion
 // Crea una nueva lección con 5 cajas vacías
 const crearLeccion = async (req, res) => {
 
@@ -70,31 +70,27 @@ const crearLeccion = async (req, res) => {
 
 }
 
-// PUT /api/cajas/leccion/:leccionId
+// PUT /api/lecciones/leccion/:id
 // Actualiza las cajas de una lección (llamado al presionar "Guardar")
 const actualizarCajasDeLeccion = async (req, res) => {
-    const { leccionId } = req.params
-    const cajasNuevas = req.body
-
-    if (!Array.isArray(cajasNuevas) || cajasNuevas.length !== 5) {
-        return res.status(400).json({ mensaje: "Se esperan exactamente 5 cajas" })
-    }
+    const leccionId = req.params
+    const datos_tarjetas = req.body
 
     try {
-        const usuario = await Usuario.findById(req.usuario.id)
-        if (!usuario) return res.status(404).json({ mensaje: "Usuario no encontrado" })
+        const cajas_ordenadas = await updateBoxesService(
+            req.usuario.id,
+            leccionId,
+            datos_tarjetas
+        )
 
-        const leccion = usuario.lecciones.id(leccionId)
-        if (!leccion) return res.status(404).json({ mensaje: "Lección no encontrada" })
+        return res.status(200).json(cajas_ordenadas)
 
-        leccion.cajas = cajasNuevas
-        await usuario.save()
-
-        return res.status(200).json({ mensaje: "Cajas actualizadas correctamente", cajas: leccion.cajas })
     } catch (error) {
         console.error("Error al actualizar cajas:", error)
         return res.status(500).json({ mensaje: "Error interno al actualizar" })
+
     }
+    
 }
 
 // DELETE /api/cajas/leccion/:leccionId
