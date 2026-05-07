@@ -45,6 +45,8 @@ function ordenarTarjetasEnCajas(datos_tarjetas) {
 // SERVICES controladores de persistencia
 // =======================================
 
+// SERVICIO DE LECCIONES
+
 export const createLectionService = async (nombreLeccion, usuario_id) => {
 
     try {
@@ -81,12 +83,9 @@ export const getUserLectionsService = async (usuario_id) => {
         const usuario = await Usuario.findById(usuario_id)
         if (!usuario) throw new Error("Usuario no encontrado")
 
-        console.log("Lecciones del usuario encontradas desde el service: ", usuario.lecciones)
-
         return usuario.lecciones
 
     } catch (error) {
-
         throw new Error(`Error al cargar las lecciones del usuario: ${error}`)
     }
 }
@@ -118,9 +117,6 @@ export const deleteLeccionService = async (usuario_id, leccion_id) => {
 export const createCardService = async (usuario_id, leccion_id, tarjeta_datos) => {
 
     const { pregunta, respuesta } = tarjeta_datos
-    console.log("Usuario id: ", usuario_id)
-    console.log("leccion id: ", leccion_id)
-    console.log("Datos de tarjeta en el service: ", tarjeta_datos)
 
     try {
         const usuario = await Usuario.findById(usuario_id)
@@ -170,18 +166,17 @@ export const updateBoxesService = async (usuario_id, leccion_id, datos_tarjetas)
 export const deleteCardService = async (usuarioId, tarjetaId) => {
 
     try {
-        console.log("tarjeta id desde el service: ", tarjetaId)
         const resultado = await Usuario.updateOne(
             { _id: usuarioId },
             { $pull: { "lecciones.$[].cajas.$[].tarjetas" : { _id: tarjetaId }}}
         )
 
-        if(resultado.modifiedCount === 0) throw new Error("Tarjeta no encotrada")
+        if(resultado.modifiedCount === 0) throw new Error("Tarjeta no encontrada")
         
         return resultado
         
     } catch (error) {
-        throw new Error("Error al eliminar la tarjeta: ", error)
+        throw new Error("Error al eliminar la tarjeta: " + error.message)
 
     }
     

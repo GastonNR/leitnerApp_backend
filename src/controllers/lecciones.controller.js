@@ -164,8 +164,8 @@ const eliminarTarjeta = async (req, res) => {
     
 
     try {
-        const eliminar = deleteCardService(usuarioId, tarjetaId)
-        return res.status(200).json({ menssage: "Tarjeta eliminada" })
+        const cajasActualizadas = deleteCardService(usuarioId, tarjetaId)
+        return res.status(200).json(cajasActualizadas)
 
     } catch (error){
         res.status(500).json({menssage: `Error al eliminar la tarjeta: ${error}`})
