@@ -1,5 +1,12 @@
 import Usuario from "../models/Usuarios.js"
-import { crearLeccionDB, createCardService, deleteLeccionService, traerLeccionesUsuario, updateBoxesService } from "../services/lecciones.service.js"
+import {
+    createLectionService,
+    createCardService,
+    deleteLeccionService,
+    getUserLectionsService,
+    updateBoxesService,
+    deleteCardService
+} from "../services/lecciones.service.js"
 
 // GET /api/lecciones/
 // Retorna todas las lecciones del usuario
@@ -8,7 +15,7 @@ const cargarLecciones = async (req, res) => {
     console.log("req.usuario.id: ", req.usuario.id)
     
     try {
-        const lecciones = await traerLeccionesUsuario(req.usuario.id)
+        const lecciones = await getUserLectionsService(req.usuario.id)
         if (!lecciones) return res.status(404).json({ mensaje: "Usuario no encontrado" })
 
         return res.status(200).json(lecciones)
@@ -51,7 +58,7 @@ const crearLeccion = async (req, res) => {
     }
 
     try {
-        const leccionGuardada = await crearLeccionDB(nombreLeccion, usuario_id)
+        const leccionGuardada = await createLectionService(nombreLeccion, usuario_id)
         return res.status(201).json(leccionGuardada)
 
     } catch (error) {
@@ -145,6 +152,27 @@ const crearTarjeta = async (req, res) => {
     }
 }
 
+// DELETE /api/leccion/:tarjeta_id
+// Eliminar tarjeta
+const eliminarTarjeta = async (req, res) => {
+
+    const usuarioId = req.usuario.id
+    const { tarjetaId } = req.params
+
+    console.log("Usuario id: ", usuarioId)
+    console.log("tarjeta id: ", tarjetaId)
+    
+
+    try {
+        const eliminar = deleteCardService(usuarioId, tarjetaId)
+        return res.status(200).json({ menssage: "Tarjeta eliminada" })
+
+    } catch (error){
+        res.status(500).json({menssage: `Error al eliminar la tarjeta: ${error}`})
+    }
+
+}
+
 export {
     cargarLecciones,
     cargarCajasDeLeccion,
@@ -152,4 +180,5 @@ export {
     actualizarCajasDeLeccion,
     eliminarLeccion,
     crearTarjeta,
+    eliminarTarjeta
 }
