@@ -17,7 +17,7 @@ function crearCajasVacias() {
 }
 
 function crearNuevaTarjeta(pregunta, respuesta) {
-    
+
     const fechaActual = new Date()
     const proxima_revision = new Date(fechaActual)
     proxima_revision.setDate(proxima_revision.getDate() + 1)
@@ -36,7 +36,7 @@ function crearNuevaTarjeta(pregunta, respuesta) {
 }
 
 function ordenarTarjetasEnCajas(datos_tarjetas) {
-    console.log("Datos tarjetas: ", datos_tarjetas)
+    console.log("Datos tarjetas en ordenar tarjetas: ", datos_tarjetas)
 
 
 }
@@ -114,15 +114,18 @@ export const deleteLeccionService = async (usuario_id, leccion_id) => {
 
 // SERVICIOS DE TARJETAS
 
-export const createCardService = async (usuario_id, leccion_id, tarjeta_datos) => {
+export const createCardService = async (usuarioId, leccionId, tarjetaDatos) => {
 
-    const { pregunta, respuesta } = tarjeta_datos
+    const { pregunta, respuesta } = tarjetaDatos
+    console.log("leccion id: ", leccionId)
+    console.log("usuario id: ", usuarioId)
+    console.log("datos de la tarjeta: ", tarjetaDatos)
 
     try {
-        const usuario = await Usuario.findById(usuario_id)
+        const usuario = await Usuario.findById(usuarioId)
         if (!usuario) throw new Error("Usuario no encontrado.")
 
-        const leccion = usuario.lecciones.id(leccion_id)
+        const leccion = usuario.lecciones.id(leccionId)
         if (!leccion) throw new Error("Lección no encontrada.")
 
         const nuevaTarjeta = crearNuevaTarjeta(pregunta, respuesta)
@@ -139,26 +142,28 @@ export const createCardService = async (usuario_id, leccion_id, tarjeta_datos) =
 
 }
 
-export const updateBoxesService = async (usuario_id, leccion_id, datos_tarjetas) => {
+export const updateBoxesService = async (usuarioId, leccionId, datosTarjetas) => {
 
-    if (!Array.isArray(cajasNuevas) || cajasNuevas.length !== 5) throw new Error("Se esperan exactamente 5 cajas")
+    console.log("Datos tarjetas: ", datosTarjetas)
 
     try {
-        const usuario = await Usuario.findById(usuario_id)
+        const cajasNuevas = datosTarjetas.cajas
+        if (!Array.isArray(cajasNuevas) || cajasNuevas.length !== 5) throw new Error("Se esperan exactamente 5 cajas")
+        const usuario = await Usuario.findById(usuarioId)
         if (!usuario) throw new Error("Usuario no encontrado")
 
         const leccion = usuario.lecciones.id(leccionId)
         if (!leccion) throw new Error("Lección no encontrada")
 
-        const cajasOrdenadas = ordenarTarjetasEnCajas(datos_tarjetas)
+        const cajasOrdenadas = ordenarTarjetasEnCajas(datosTarjetas)
         leccion.cajas = cajasOrdenadas
         await usuario.save()
 
         return leccion.cajas
 
     } catch (error) {
-        console.error("Error al actualizar cajas:", error)
-        return res.status(500).json({ mensaje: "Error interno al actualizar" })
+        throw new Error("Error interno al actualizar")
+
     }
 
 }
@@ -168,16 +173,16 @@ export const deleteCardService = async (usuarioId, tarjetaId) => {
     try {
         const resultado = await Usuario.updateOne(
             { _id: usuarioId },
-            { $pull: { "lecciones.$[].cajas.$[].tarjetas" : { _id: tarjetaId }}}
+            { $pull: { "lecciones.$[].cajas.$[].tarjetas": { _id: tarjetaId } } }
         )
 
-        if(resultado.modifiedCount === 0) throw new Error("Tarjeta no encontrada")
-        
+        if (resultado.modifiedCount === 0) throw new Error("Tarjeta no encontrada")
+
         return resultado
-        
+
     } catch (error) {
         throw new Error("Error al eliminar la tarjeta: " + error.message)
 
     }
-    
+
 }

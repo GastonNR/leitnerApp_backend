@@ -6,7 +6,8 @@ import {
     actualizarCajasDeLeccion, // => Se usa con el botón "Guardar" del header.
     eliminarLeccion, // => Se usa con el botón de eliminar en la ventana modal del frontend.
     crearTarjeta, // => Se usa con el botón de "Crear tarjeta" en el aside.
-    eliminarTarjeta
+    eliminarTarjeta,
+    guardarLeccion
 } from '../controllers/lecciones.controller.js'
 
 const lection_routes = Router()
@@ -16,6 +17,7 @@ lection_routes.get('/', verificarToken, cargarLecciones)
 lection_routes.post('/leccion', verificarToken, crearLeccion)
 lection_routes.put('/leccion/:id', verificarToken, actualizarCajasDeLeccion)
 lection_routes.delete('/:id', verificarToken, eliminarLeccion)
+lection_routes.put('/:leccionId', verificarToken, guardarLeccion)
 
 // Tarjetas
 lection_routes.post('/leccion/:leccion_id', verificarToken, crearTarjeta)

@@ -120,6 +120,24 @@ const eliminarLeccion = async (req, res) => {
 
     }
 }
+// PUT /api/lecciones/:leccionId
+// Guarda las lecciones después de que el usuario haya respondido todas las preguntas.
+const guardarLeccion = async (req, res) => {
+
+    const usuarioId = req.usuario.id
+    const { leccionId } = req.params
+    const datosTarjetas = req.body
+
+    try {
+        const leccionOrdenada = updateBoxesService(usuarioId, leccionId, datosTarjetas)
+        return res.status(200).json(leccionOrdenada)
+
+    } catch (error) {
+        res.status(500).json({message: "Error al guardar los datos de la lección."})
+
+    }
+
+}
 
 // POST /api/cajas/leccion/:leccionId/tarjeta
 // Agrega una tarjeta nueva a la caja 1 de una lección
@@ -180,5 +198,6 @@ export {
     actualizarCajasDeLeccion,
     eliminarLeccion,
     crearTarjeta,
-    eliminarTarjeta
+    eliminarTarjeta,
+    guardarLeccion
 }
