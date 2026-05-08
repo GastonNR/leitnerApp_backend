@@ -7,6 +7,7 @@ import Usuario from "../models/Usuarios.js"
 // ==========================
 
 function crearCajasVacias() {
+    console.log("estamos en crear cajas vacías")
     return [
         { nombre: "Caja 1", tarjetas: [] },
         { nombre: "Caja 2", tarjetas: [] },
@@ -37,7 +38,7 @@ function crearNuevaTarjeta(pregunta, respuesta) {
 
 function ordenarTarjetasEnCajas(datos_tarjetas) {
     console.log("Datos tarjetas en ordenar tarjetas: ", datos_tarjetas)
-
+    return datos_tarjetas
 
 }
 
@@ -65,13 +66,15 @@ export const createLectionService = async (nombreLeccion, usuario_id) => {
             nombre: nombreLeccion.trim(),
             cajas: crearCajasVacias()
         }
-
+        console.log("nueva lección: ", nuevaLeccion)
         usuario.lecciones.push(nuevaLeccion)
+        console.log("usuario: ", usuario)
         await usuario.save()
 
         return usuario.lecciones[usuario.lecciones.length - 1]
 
     } catch (error) {
+        console.error(error)
         throw error
 
     }
@@ -136,7 +139,8 @@ export const createCardService = async (usuarioId, leccionId, tarjetaDatos) => {
         return tarjetas[tarjetas.length - 1]
 
     } catch (error) {
-        throw new Error("Error al guardar la tarjeta", error)
+        console.error(error)
+        throw error
 
     }
 
