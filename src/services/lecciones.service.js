@@ -63,30 +63,35 @@ function ordenarTarjetasEnCajas(datosTarjetas) {
                     case 1:
                         tarjetaEvaluada.nivel = 2
                         tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 3)
+                        tarjetaEvaluada.es_correcta = null
                         nuevasCajas[1].tarjetas.push(tarjetaEvaluada)
 
                         break;
                     case 2:
                         tarjetaEvaluada.nivel = 3
                         tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 7)
+                        tarjetaEvaluada.es_correcta = null
                         nuevasCajas[2].tarjetas.push(tarjetaEvaluada)
 
                         break;
                     case 3:
                         tarjetaEvaluada.nivel = 4
                         tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 14)
+                        tarjetaEvaluada.es_correcta = null
                         nuevasCajas[3].tarjetas.push(tarjetaEvaluada)
 
                         break;
                     case 4:
                         tarjetaEvaluada.nivel = 5
                         tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 30)
+                        tarjetaEvaluada.es_correcta = null
                         nuevasCajas[4].tarjetas.push(tarjetaEvaluada)
 
                         break;
                     case 5:
                         tarjetaEvaluada.nivel = 5
                         tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 30)
+                        tarjetaEvaluada.es_correcta = null
                         nuevasCajas[4].tarjetas.push(tarjetaEvaluada)
 
                         break;
@@ -102,6 +107,7 @@ function ordenarTarjetasEnCajas(datosTarjetas) {
                 tarjetaEvaluada.proxima_revision = proximaRevision
             
                 tarjetaEvaluada.nivel = 1
+                tarjetaEvaluada.es_correcta = null
                 nuevasCajas[0].tarjetas.push(tarjetaEvaluada)
 
             }
@@ -238,9 +244,6 @@ export const updateBoxesService = async (usuarioId, leccionId, datosTarjetas) =>
 
         leccion.cajas = cajasOrdenadas
 
-        //leccion = cajasOrdenadas
-
-        //console.log("Datos de las cajas de lección ya ordenadas: ", leccion)
         await usuario.save()
 
         return leccion
