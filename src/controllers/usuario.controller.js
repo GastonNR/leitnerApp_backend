@@ -1,4 +1,4 @@
-import { registrar, logear } from '../services/usuario.service.js'
+import { registrar, loginService } from '../services/usuario.service.js'
 
 const registrarUsuario = async (req, res) => {
 
@@ -8,11 +8,19 @@ const registrarUsuario = async (req, res) => {
         const usuario = {nombre, email, password}
 
         const respuesta = await registrar(usuario)
-        res.status(201).json(respuesta)
+
+        res.status(201).json({
+            ok: true,
+            ...respuesta
+        })
 
     } catch (error) {
-
-        res.status(500).json({ menssage: "Error en el servidor desde la función de registrar usuario: ", error })
+        console.error(error)
+        
+        res.status(500).json({
+            ok: false,
+            menssage: error.message 
+        })
         
     }
    
@@ -24,12 +32,16 @@ const logearUsuario = async (req, res) => {
 
     try {
         const credenciales = {email, password}
-        const respuesta = await logear(credenciales)
+        const respuesta = await loginService(credenciales)
         res.status(201).json(respuesta)
 
     } catch (error) {
         console.error(error)
-        res.status(500).json({ message: `Error en el servidor ${error}`})
+
+        res.status(error.status || 500).json({
+            ok: false,
+            message: error.message
+        })
     }
 }
 
