@@ -4,44 +4,41 @@ import bcrypt from 'bcryptjs'
 
 async function registrar(usuario) {
 
-    const { nombre, email, password } = usuario
+    try {
+        const { nombre, email, password } = usuario
+        const salt = await bcrypt.genSalt(10)
+        const passEncriptada = await bcrypt.hash(password, salt)
 
-    const usuarioExistente = await Usuario.findOne({ email })
+        const cajasVacias = Array.from({ length: 5 }, (_, i) => ({
+            nombre: `Caja ${i + 1}`,
+            tarjetas: []
+        }))
 
-    if (usuarioExistente) {
-        const error = new Error("El usuario ya existe")
-        error.status = 409
+        const nuevoUsuario = new Usuario({
+            nombre,
+            email,
+            password: passEncriptada,
+            //lecciones: [{ nombre: 'Mi primera leccion', cajas: cajasVacias }]
+        })
+
+        const guardar = await nuevoUsuario.save()
+        return { message: "Usuario registrado" }
+
+    } catch (error) {
+
+        if(error.code === 11000){
+            const newError = new Error("El usuario ya existe")
+            newError.status = 409
+            throw newError
+        }
+
         throw error
     }
 
-    const salt = await bcrypt.genSalt(10)
-    const passEncriptada = await bcrypt.hash(password, salt)
-
-    const cajasVacias = Array.from({ length: 5 }, (_, i) => ({
-        nombre: `Caja ${i + 1}`,
-        tarjetas: []
-    }))
-
-    const nuevoUsuario = new Usuario({
-        nombre,
-        email,
-        password: passEncriptada,
-        //lecciones: [{ nombre: 'Mi primera leccion', cajas: cajasVacias }]
-    })
-
-    const guardar = await nuevoUsuario.save()
-
-    if(!guardar){
-        const error = new Error("Error al registrar el usuario.")
-        error.status = 500
-        throw error
-    }
-
-    return {mensaje: "Usuario registrado"}
 
 }
 
-async function loginService( credenciales ) {
+async function loginService(credenciales) {
 
     const { email, password } = credenciales
 

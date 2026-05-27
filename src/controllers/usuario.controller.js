@@ -16,10 +16,10 @@ const registrarUsuario = async (req, res) => {
 
     } catch (error) {
         console.error(error)
-        
+
         res.status(500).json({
             ok: false,
-            menssage: error.message 
+            message: error.message 
         })
         
     }
