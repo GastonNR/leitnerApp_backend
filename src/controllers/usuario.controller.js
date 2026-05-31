@@ -33,7 +33,10 @@ const logearUsuario = async (req, res) => {
     try {
         const credenciales = {email, password}
         const respuesta = await loginService(credenciales)
-        res.status(201).json(respuesta)
+        res.status(201).json({
+            ok: true,
+            ...respuesta
+        })
 
     } catch (error) {
         console.error(error)
