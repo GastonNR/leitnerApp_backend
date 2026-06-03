@@ -1,5 +1,6 @@
-import { Router } from 'express'
+import { RequestHandler, Router } from 'express'
 import verificarToken from '../middleware/verificarToken.js'
+
 import {
     cargarLecciones, // => Se realiza al comienzo cuando el usuario se logea. Se carga el usuariojunto con sus lecciones
     crearLeccion, // => Se realiza cuándo el usario clickea el botón de "Crear lección" en la ventana modal del frontend. 
