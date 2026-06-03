@@ -11,7 +11,7 @@ async function iniciarServidor() {
         })
 
     } catch (error) {
-        console.error(`Error al iniciar el servidor ${error.message}`)
+        console.error(`Error al iniciar el servidor ${error}`)
         process.exit(1)
 
     }

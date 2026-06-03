@@ -13,3 +13,5 @@ export const connectDB = async (): Promise<void> => {
         
     }
 }
+
+export default connectDB
