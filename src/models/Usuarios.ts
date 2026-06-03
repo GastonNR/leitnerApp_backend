@@ -1,7 +1,8 @@
 import mongoose from 'mongoose'
+import type { IUsuarios } from '../types/models.types.js'
 import { LeccionSchema } from './Leccion.js'
 
-const usuarioSchema = new mongoose.Schema({
+const usuarioSchema = new mongoose.Schema<IUsuarios>({
     nombre: { type: String, require: true },
     email: { type: String, require: true, unique: true },
     password: { type: String, require: true },
@@ -11,4 +12,4 @@ const usuarioSchema = new mongoose.Schema({
     }
 })
 
-export default mongoose.model('Usuario', usuarioSchema)
+export default mongoose.model<IUsuarios>('Usuario', usuarioSchema)

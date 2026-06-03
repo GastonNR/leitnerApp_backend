@@ -1,6 +1,7 @@
 import mongoose from "mongoose"
+import { ITarjeta } from "../types/models.types.js"
 
-const TarjetaSchema = new mongoose.Schema({
+const TarjetaSchema = new mongoose.Schema<ITarjeta>({
     
     pregunta: { type: String, required: true },
     respuesta: { type: String, required: true },
