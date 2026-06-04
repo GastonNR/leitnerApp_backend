@@ -23,7 +23,7 @@ import type {
 // GET /api/lecciones/
 // Retorna todas las lecciones del usuario
 const cargarLecciones = async (req: Request, res: Response): Promise<Response> => {
-
+    console.log("estamos en cargar lecciones.")
     if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
 
     try {
@@ -74,7 +74,10 @@ const crearLeccion = async (req: Request<{}, {}, CrearLeccionBody>, res: Respons
 
     try {
         const leccionGuardada: ILeccion = await createLectionService(nombreLeccion, usuario_id)
-        return res.status(201).json(leccionGuardada)
+        return res.status(201).json({
+            ok: true,
+            nuevaLeccion: leccionGuardada
+        })
 
     } catch (error) {
         if(error instanceof Error){
@@ -144,24 +147,6 @@ const eliminarLeccion = async (req: Request<EliminarLeccionParams>, res: Respons
 
     }
 }
-// PUT /api/lecciones/:leccionId
-// Guarda las lecciones después de que el usuario haya respondido todas las preguntas.
-//const guardarLeccion = async (req, res) => {
-//
-//    const usuarioId = req.usuario.id
-//    const { leccionId } = req.params
-//    const datosTarjetas = req.body
-//
-//    try {
-//        const leccionOrdenada = updateBoxesService(usuarioId, leccionId, datosTarjetas)
-//        return res.status(200).json(leccionOrdenada)
-//
-//    } catch (error) {
-//        res.status(500).json({message: "Error al guardar los datos de la lección."})
-//
-//    }
-//
-//}
 
 // POST /api/cajas/leccion/:leccionId/tarjeta
 // Agrega una tarjeta nueva a la caja 1 de una lección

@@ -149,7 +149,7 @@ export const createLectionService = async (nombreLeccion: string, usuario_id: st
     const leccionGuardada = usuario.lecciones[usuario.lecciones.length - 1]
     if(!leccionGuardada) throw new Error("Error al recuperar la lección.")
 
-    return leccionGuardada
+    return leccionGuardada.toObject()
 
 }
 
