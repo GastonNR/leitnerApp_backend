@@ -198,18 +198,18 @@ export const createCardService = async (usuarioId: string, leccionId: string, ta
 
 }
 
-export const updateBoxesService = async (usuarioId: string, leccionId: string, datosTarjetas: ILeccion) => {
-
-    console.log("Datos tarjetas: ", datosTarjetas)
+export const updateBoxesService = async (usuarioId: string, datosTarjetas: ILeccion) => {
 
     const cajasNuevas = datosTarjetas.cajas
 
     if (!Array.isArray(cajasNuevas) || cajasNuevas.length !== 5) throw new Error("Se esperan exactamente 5 cajas")
-
+    
     const usuario: UsuarioDocument | null = await Usuario.findById(usuarioId)
     if (!usuario) throw new Error("Usuario no encontrado")
-
-    const leccion: LeccionSubdocument | null = usuario.lecciones.id(leccionId)
+    
+    if (!datosTarjetas._id) throw new Error("La lección no tiene ID")
+    
+    const leccion = usuario.lecciones.find(l => l._id.toString() === datosTarjetas._id?.toString())
     if (!leccion) throw new Error("Lección no encontrada")
 
     const cajasOrdenadas = ordenarTarjetasEnCajas(datosTarjetas)

@@ -1,13 +1,13 @@
-import { ILeccion } from "./models.types.js"
+import { ICaja, ILeccion } from "./models.types.js"
 
 // PARAMS
 export interface CargarCajasDeLeccionParams{
     leccionId: string
 }
 
-export interface ActualizarCajasDeLeccionParams{
-    id: string
-}
+//export interface ActualizarCajasDeLeccionParams{
+//    id: string
+//}
 
 export interface EliminarLeccionParams{
     id: string
@@ -25,8 +25,13 @@ export interface EliminarTarjetaParams{
 export interface CrearLeccionBody{
     nuevaLeccion: string
 }
+//export interface ActualizarCajasDeLeccionBody{
+//    datosTarjetas: ILeccion
+//}
 export interface ActualizarCajasDeLeccionBody{
-    datosTarjetas: ILeccion
+    _id: string
+    nombre: string
+    cajas: Array<ICaja>
 }
 export interface CrearTarjetaBody{
     pregunta: string
