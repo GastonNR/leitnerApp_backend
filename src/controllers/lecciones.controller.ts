@@ -8,10 +8,9 @@ import {
     updateBoxesService,
     deleteCardService
 } from "../services/lecciones.service.js"
-import { ILeccion, IUsuarios } from "../types/models.types.js"
+import { ILeccion } from "../types/models.types.js"
 import type {
     ActualizarCajasDeLeccionBody,
-    ActualizarCajasDeLeccionParams,
     CargarCajasDeLeccionParams,
     CrearLeccionBody,
     CrearTarjetaBody,
@@ -19,6 +18,7 @@ import type {
     EliminarLeccionParams,
     EliminarTarjetaParams
 } from "../types/lecciones.types.js"
+import { Types } from "mongoose"
 
 // GET /api/lecciones/
 // Retorna todas las lecciones del usuario
@@ -98,17 +98,20 @@ const crearLeccion = async (req: Request<{}, {}, CrearLeccionBody>, res: Respons
 
 // PUT /api/lecciones/leccion/:id
 // Actualiza las cajas de una lección (llamado al presionar "Guardar")
-const actualizarCajasDeLeccion: RequestHandler<ActualizarCajasDeLeccionParams, {}, ActualizarCajasDeLeccionBody> = async (req, res): Promise<Response> => {
+const actualizarCajasDeLeccion = async (req: Request<{}, {}, ActualizarCajasDeLeccionBody>, res: Response): Promise<Response> => {
 
     if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
-
-    const {id} = req.params
-    const {datosTarjetas} = req.body
+  
+    const {_id, cajas, nombre} = req.body
+    const datosTarjetas: ILeccion = {
+        _id: new Types.ObjectId(_id),
+        nombre: nombre,
+        cajas: cajas
+    }
 
     try {
         const cajas_ordenadas = await updateBoxesService(
             req.usuario.id,
-            id,
             datosTarjetas
         )
 
@@ -151,7 +154,7 @@ const eliminarLeccion = async (req: Request<EliminarLeccionParams>, res: Respons
 // POST /api/cajas/leccion/:leccionId/tarjeta
 // Agrega una tarjeta nueva a la caja 1 de una lección
 const crearTarjeta = async (req: Request<CrearTarjetaParams, {}, CrearTarjetaBody>, res: Response): Promise<Response> => {
-
+    
     if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
 
     const usuario_id = req.usuario.id
@@ -168,7 +171,7 @@ const crearTarjeta = async (req: Request<CrearTarjetaParams, {}, CrearTarjetaBod
             leccion_id,
             datos_tarjeta
         )
-
+        
         return res.status(200).json(tarjetaGuardada)
 
     } catch (error) {
