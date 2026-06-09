@@ -141,6 +141,7 @@ export const createLectionService = async (nombreLeccion: string, usuario_id: st
 
     usuario.lecciones.push({
         nombre: nombreLeccion.trim(),
+        fechaCreacion: new Date(),
         cajas: crearCajasVacias()
     })
     

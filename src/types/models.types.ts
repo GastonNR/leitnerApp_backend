@@ -18,6 +18,7 @@ export interface ICaja{
 }
 export interface ILeccion{
     _id?: Types.ObjectId
+    fechaCreacion: Date
     nombre: string
     cajas: ICaja[]
 }
@@ -33,6 +34,7 @@ export interface IUsuarios{
 // SUBDOCUMENTOS MONGOOSE
 export type LeccionSubdocument = Types.Subdocument<Types.ObjectId> & {
     nombre: string
+    fechaCreacion: Date
     cajas: Types.DocumentArray<CajasSubdocument>
 }
 export type CajasSubdocument = Types.Subdocument<Types.ObjectId> & {

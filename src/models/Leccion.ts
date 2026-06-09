@@ -9,6 +9,7 @@ function cajasValidas(val: ICaja[]) {
 
 const LeccionSchema = new mongoose.Schema<ILeccion>({
     nombre: { type: String, required: true },
+    fechaCreacion: { type: Date, required: true},
     cajas: {
         type: [CajaSchema],
         validate: [cajasValidas, '{PATH} debe contener exactamente 5 cajas']
