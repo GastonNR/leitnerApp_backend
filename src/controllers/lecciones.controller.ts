@@ -1,5 +1,5 @@
-import { Request, Response, RequestHandler } from "express"
-import Usuario from "../models/Usuarios.js"
+import { Request, Response } from "express"
+import { isValidObjectId, Types } from "mongoose"
 import {
     createLectionService,
     createCardService,
@@ -11,51 +11,29 @@ import {
 import { ILeccion } from "../types/models.types.js"
 import type {
     ActualizarCajasDeLeccionBody,
-    CargarCajasDeLeccionParams,
     CrearLeccionBody,
     CrearTarjetaBody,
     CrearTarjetaParams,
     EliminarLeccionParams,
     EliminarTarjetaParams
 } from "../types/lecciones.types.js"
-import { Types } from "mongoose"
+import { responderError } from "../utils/responderError.js"
+
+const idInvalido = (res: Response, que: string): Response =>
+    res.status(400).json({ ok: false, message: `ID de ${que} inválido` })
 
 // GET /api/lecciones/
 // Retorna todas las lecciones del usuario
 const cargarLecciones = async (req: Request, res: Response): Promise<Response> => {
-    console.log("estamos en cargar lecciones.")
-    if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
+
+    if (!req.usuario) return res.status(401).json({ ok: false, message: "No autorizado" })
 
     try {
         const lecciones: ILeccion[] = await getUserLectionsService(req.usuario.id)
-        if (!lecciones) return res.status(404).json({ mensaje: "Usuario no encontrado" })
-
         return res.status(200).json(lecciones)
 
     } catch (error) {
-        console.error('Error al cargar lecciones:', error)
-        return res.status(500).json({ mensaje: 'Error al cargar las lecciones del usuario' })
-    }
-}
-
-// GET /api/lecciones/leccion/:leccionId
-// Retorna las cajas de una lección específica
-const cargarCajasDeLeccion = async (req: Request<CargarCajasDeLeccionParams>, res: Response): Promise<Response> => {
-
-    if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
-
-    try {
-        const usuario = await Usuario.findById(req.usuario.id)
-        if (!usuario) return res.status(404).json({ mensaje: "Usuario no encontrado" })
-
-        //const leccion = usuario.lecciones.id(req.params.leccionId)
-        const leccion = usuario.lecciones.find(leccion => leccion._id?.toString() === req.params.leccionId)
-        if (!leccion) return res.status(404).json({ mensaje: "Lección no encontrada" })
-
-        return res.status(200).json(leccion.cajas)
-    } catch (error) {
-        console.error('Error al cargar cajas:', error)
-        return res.status(500).json({ mensaje: 'Error al cargar las cajas' })
+        return responderError(res, error, 'Error al cargar las lecciones del usuario')
     }
 }
 
@@ -63,150 +41,116 @@ const cargarCajasDeLeccion = async (req: Request<CargarCajasDeLeccionParams>, re
 // Crea una nueva lección con 5 cajas vacías
 const crearLeccion = async (req: Request<{}, {}, CrearLeccionBody>, res: Response): Promise<Response> => {
 
-    if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
+    if (!req.usuario) return res.status(401).json({ ok: false, message: "No autorizado" })
 
-    const nombreLeccion: string = req.body.nuevaLeccion
-    const usuario_id: string = req.usuario.id
+    const nombreLeccion = req.body?.nuevaLeccion
 
-    if (!nombreLeccion || !nombreLeccion.trim()) {
-        return res.status(400).json({ mensaje: "El nombre de la lección es requerido" })
+    if (typeof nombreLeccion !== 'string' || !nombreLeccion.trim()) {
+        return res.status(400).json({ ok: false, message: "El nombre de la lección es requerido" })
     }
 
     try {
-        const leccionGuardada: ILeccion = await createLectionService(nombreLeccion, usuario_id)
+        const leccionGuardada: ILeccion = await createLectionService(nombreLeccion, req.usuario.id)
         return res.status(201).json({
             ok: true,
             nuevaLeccion: leccionGuardada
         })
 
     } catch (error) {
-        if(error instanceof Error){
-            if (error.message === "Ya existe una lección con ese nombre") {
-                return res.status(409).json({ mensaje: error.message })
-            }
-    
-            if (error.message === "Usuario no encontrado") {
-                return res.status(404).json({ mensaje: error.message })
-            }
-        }
-
-        console.error(error)
-        return res.status(500).json({ mensaje: "Error interno del servidor."})
+        return responderError(res, error, "Error interno del servidor.")
     }
 
 }
 
-// PUT /api/lecciones/leccion/:id
-// Actualiza las cajas de una lección (llamado al presionar "Guardar")
+// PUT /api/lecciones/leccion
+// Guarda la sesión de estudio y reordena las tarjetas (algoritmo Leitner)
 const actualizarCajasDeLeccion = async (req: Request<{}, {}, ActualizarCajasDeLeccionBody>, res: Response): Promise<Response> => {
 
-    if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
-  
-    const {_id, cajas, nombre} = req.body
-    const datosTarjetas: ILeccion = {
-        _id: new Types.ObjectId(_id),
-        nombre: nombre,
-        cajas: cajas
-    }
+    if (!req.usuario) return res.status(401).json({ ok: false, message: "No autorizado" })
+
+    const { _id, cajas } = req.body ?? {}
+    if (!isValidObjectId(_id)) return idInvalido(res, 'lección')
 
     try {
-        const cajas_ordenadas = await updateBoxesService(
-            req.usuario.id,
-            datosTarjetas
-        )
+        const leccion = await updateBoxesService(req.usuario.id, {
+            _id: new Types.ObjectId(_id),
+            cajas
+        })
 
-        return res.status(200).json(cajas_ordenadas)
+        return res.status(200).json(leccion)
 
     } catch (error) {
-        console.error("Error al actualizar cajas:", error)
-        return res.status(500).json({ mensaje: "Error interno al actualizar" })
-
+        return responderError(res, error, "Error interno al actualizar")
     }
-    
+
 }
 
-// DELETE /api/cajas/leccion/:leccionId
+// DELETE /api/lecciones/:id
 // Elimina una lección completa
 const eliminarLeccion = async (req: Request<EliminarLeccionParams>, res: Response): Promise<Response> => {
 
-    if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
+    if (!req.usuario) return res.status(401).json({ ok: false, message: "No autorizado" })
 
     const { id } = req.params
-    const usuario_id  = req.usuario.id
-
-    console.log("id: ", id)
+    if (!isValidObjectId(id)) return idInvalido(res, 'lección')
 
     try {
-        await deleteLeccionService(usuario_id, id)
+        await deleteLeccionService(req.usuario.id, id)
 
         return res.status(200).json({
             ok: true,
-            mensaje: "Lección eliminada." 
+            mensaje: "Lección eliminada."
         })
 
     } catch (error) {
-        console.error("Error al eliminar lección:", error)
-        return res.status(500).json({ mensaje: "Error interno al eliminar" })
-
+        return responderError(res, error, "Error interno al eliminar")
     }
 }
 
-// POST /api/cajas/leccion/:leccionId/tarjeta
+// POST /api/lecciones/leccion/:leccion_id
 // Agrega una tarjeta nueva a la caja 1 de una lección
 const crearTarjeta = async (req: Request<CrearTarjetaParams, {}, CrearTarjetaBody>, res: Response): Promise<Response> => {
-    
-    if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
 
-    const usuario_id = req.usuario.id
-    const {leccion_id} = req.params
-    const {pregunta, respuesta} = req.body
-    const datos_tarjeta = {
-        pregunta: pregunta,
-        respuesta: respuesta
-    }
+    if (!req.usuario) return res.status(401).json({ ok: false, message: "No autorizado" })
+
+    const { leccion_id } = req.params
+    if (!isValidObjectId(leccion_id)) return idInvalido(res, 'lección')
+
+    const { pregunta, respuesta } = req.body ?? {}
 
     try {
-        const tarjetaGuardada = await createCardService(
-            usuario_id,
-            leccion_id,
-            datos_tarjeta
-        )
-        
-        return res.status(200).json(tarjetaGuardada)
+        const tarjetaGuardada = await createCardService(req.usuario.id, leccion_id, { pregunta, respuesta })
+        return res.status(201).json(tarjetaGuardada)
 
     } catch (error) {
-        console.error(error)
-        return res.status(500).json({ mensaje: "Error en el servidor" })
-
+        return responderError(res, error, "Error en el servidor")
     }
 }
 
-// DELETE /api/leccion/:tarjeta_id
-// Eliminar tarjeta
+// DELETE /api/lecciones/leccion/:tarjetaId
+// Elimina una tarjeta
 const eliminarTarjeta = async (req: Request<EliminarTarjetaParams>, res: Response): Promise<Response> => {
 
-    if(!req.usuario) return res.status(401).json({mensaje: "No autorizado"})
+    if (!req.usuario) return res.status(401).json({ ok: false, message: "No autorizado" })
 
-    const usuarioId = req.usuario.id
     const { tarjetaId } = req.params
+    if (!isValidObjectId(tarjetaId)) return idInvalido(res, 'tarjeta')
 
     try {
-        await deleteCardService(usuarioId, tarjetaId)
+        await deleteCardService(req.usuario.id, tarjetaId)
         return res.sendStatus(204)
 
-    } catch (error){
-        return res.status(500).json({menssage: `Error al eliminar la tarjeta: ${error}`})
+    } catch (error) {
+        return responderError(res, error, "Error al eliminar la tarjeta")
     }
 
 }
 
 export {
     cargarLecciones,
-    cargarCajasDeLeccion,
     crearLeccion,
     actualizarCajasDeLeccion,
     eliminarLeccion,
     crearTarjeta,
     eliminarTarjeta,
-    //guardarLeccion
 }

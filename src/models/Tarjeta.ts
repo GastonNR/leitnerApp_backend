@@ -8,7 +8,7 @@ const TarjetaSchema = new mongoose.Schema<ITarjeta>({
     nivel: {type: Number, default: 1 },
     ultima_revision: { type: Date, default: Date.now },
     proxima_revision: { type: Date, required: true },
-    es_correcta: {type: Boolean}
+    es_correcta: { type: Boolean, default: null }
 
 })
 

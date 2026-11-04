@@ -12,12 +12,19 @@ import { AppError } from '../types/AppError.js'
 import { mongo } from 'mongoose'
 import env from '../config/env.js'
 
+const esTextoNoVacio = (valor: unknown): valor is string =>
+    typeof valor === 'string' && valor.trim().length > 0
+
 async function registrar(usuario: RegistrarUsuarioBody): Promise<RegistrarResponse> {
 
+    const { nombre, email, password } = usuario
+
+    if (!esTextoNoVacio(nombre) || !esTextoNoVacio(email) || !esTextoNoVacio(password)) {
+        throw new AppError("Nombre, email y contraseña son obligatorios.", 400)
+    }
+
     try {
-        const { nombre, email, password } = usuario
-        const salt = await bcrypt.genSalt(10)
-        const passEncriptada = await bcrypt.hash(password, salt)
+        const passEncriptada = await bcrypt.hash(password, 10)
 
         const nuevoUsuario = new Usuario({
             nombre,
@@ -29,11 +36,9 @@ async function registrar(usuario: RegistrarUsuarioBody): Promise<RegistrarRespon
         return { message: "Usuario registrado" }
 
     } catch (error) {
-         
-        if(error instanceof mongo.MongoServerError && error.code === 11000) throw new AppError("El usuario ya existe.", 409)
+        if (error instanceof mongo.MongoServerError && error.code === 11000) throw new AppError("El usuario ya existe.", 409)
         throw error
     }
-
 
 }
 
@@ -41,12 +46,16 @@ async function loginService(credenciales: LogearUsuarioBody): Promise<LoginRespo
 
     const { email, password } = credenciales
 
+    if (!esTextoNoVacio(email) || !esTextoNoVacio(password)) {
+        throw new AppError('Email y contraseña son obligatorios.', 400)
+    }
+
+    // El esquema normaliza el email (trim + lowercase) también en la consulta.
     const usuario = await Usuario.findOne({ email })
 
-    if (!usuario) throw new AppError('Usuario no encontrado', 404)
-
-    const esCorrectaPass = await bcrypt.compare(password, usuario.password)
-    if(!esCorrectaPass) throw new AppError('Contraseña incorrecta', 401)
+    // Mismo mensaje en ambos casos para no revelar qué emails están registrados.
+    const esCorrectaPass = usuario ? await bcrypt.compare(password, usuario.password) : false
+    if (!usuario || !esCorrectaPass) throw new AppError('Email o contraseña incorrectos', 401)
 
     const payload: JwtPayload = {
         id: usuario._id.toString(),
@@ -58,15 +67,14 @@ async function loginService(credenciales: LogearUsuarioBody): Promise<LoginRespo
         env.jwtSecret,
         { expiresIn: "24h" }
     )
-    const loginResponse: LoginResponse = {
+
+    return {
         token,
         usuario: {
             id: usuario.id,
             nombre: usuario.nombre
         }
     }
-
-    return loginResponse
 
 }
 

@@ -1,13 +1,23 @@
-import { eliminarLeccion } from "../controllers/lecciones.controller.js"
-//import Leccion from "../models/Leccion.js"
 import Usuario from "../models/Usuarios.js"
 import { AppError } from "../types/AppError.js"
 import { TarjetaDTO } from "../types/lecciones.types.js"
-import { ICaja, ILeccion, ITarjeta, LeccionDocument, LeccionSubdocument, UsuarioDocument } from "../types/models.types.js"
+import { ICaja, ILeccion, ITarjeta, UsuarioDocument } from "../types/models.types.js"
 
 // ==========================
 // DOMAIN reglas del sistema
 // ==========================
+
+const NIVEL_MIN = 1
+const NIVEL_MAX = 5
+
+// Días hasta la próxima revisión según el nivel al que pasa la tarjeta.
+const DIAS_POR_NIVEL: Record<number, number> = {
+    1: 1,
+    2: 3,
+    3: 7,
+    4: 14,
+    5: 30,
+}
 
 function crearCajasVacias(): ICaja[] {
     return [
@@ -19,102 +29,61 @@ function crearCajasVacias(): ICaja[] {
     ] as ICaja[]
 }
 
+function sumarDias(fecha: Date, dias: number): Date {
+    const resultado = new Date(fecha)
+    resultado.setDate(resultado.getDate() + dias)
+    return resultado
+}
+
+// Normaliza un nivel desconocido o fuera de rango para que ninguna tarjeta se pierda.
+function nivelValido(nivel: unknown): number {
+    const n = Number(nivel)
+    if (!Number.isInteger(n)) return NIVEL_MIN
+    return Math.min(Math.max(n, NIVEL_MIN), NIVEL_MAX)
+}
+
 function crearNuevaTarjeta(pregunta: string, respuesta: string): ITarjeta {
 
     const fechaActual: Date = new Date()
-    const proxima_revision: Date = new Date(fechaActual)
-    proxima_revision.setDate(proxima_revision.getDate() + 1)
 
-    const nuevaTarjeta: ITarjeta = {
+    return {
         pregunta: pregunta,
         respuesta: respuesta,
-        nivel: 1,
-        ultima_revision: new Date(),
-        proxima_revision: proxima_revision,
+        nivel: NIVEL_MIN,
+        ultima_revision: fechaActual,
+        proxima_revision: sumarDias(fechaActual, DIAS_POR_NIVEL[NIVEL_MIN]),
         es_correcta: null
     }
-
-    return nuevaTarjeta
-
 }
 
-function ordenarTarjetasEnCajas(datosTarjetas: ILeccion): ICaja[] {
-    //console.log("Datos tarjetas en ordenar tarjetas: ", datosTarjetas)
-    //console.log("tarjetas dentro de la lección: ", datosTarjetas.cajas[0].tarjetas)
+function ordenarTarjetasEnCajas(datosTarjetas: Pick<ILeccion, 'cajas'>): ICaja[] {
+
     const nuevasCajas: ICaja[] = crearCajasVacias()
     const fechaActual: Date = new Date()
 
-    for (let i = 0; i < datosTarjetas.cajas.length; i++) {
+    datosTarjetas.cajas.forEach((caja, indiceCaja) => {
 
-        for (let j = 0; j < datosTarjetas.cajas[i].tarjetas.length; j++) {
+        for (const tarjetaEvaluada of caja.tarjetas ?? []) {
 
-            const tarjetaEvaluada: ITarjeta = datosTarjetas.cajas[i].tarjetas[j]
-
-            if (tarjetaEvaluada.es_correcta === null){
-                nuevasCajas[i].tarjetas.push(tarjetaEvaluada)
-                continue
-            } 
-
-            if (tarjetaEvaluada.es_correcta === true) {
-
-                const proximaRevision: Date = new Date(tarjetaEvaluada.proxima_revision)
-                tarjetaEvaluada.proxima_revision = proximaRevision
-                tarjetaEvaluada.ultima_revision = new Date()
-
-                switch (tarjetaEvaluada.nivel) {
-                    case 1:
-                        tarjetaEvaluada.nivel = 2
-                        tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 3)
-                        tarjetaEvaluada.es_correcta = null
-                        nuevasCajas[1].tarjetas.push(tarjetaEvaluada)
-
-                        break;
-                    case 2:
-                        tarjetaEvaluada.nivel = 3
-                        tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 7)
-                        tarjetaEvaluada.es_correcta = null
-                        nuevasCajas[2].tarjetas.push(tarjetaEvaluada)
-
-                        break;
-                    case 3:
-                        tarjetaEvaluada.nivel = 4
-                        tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 14)
-                        tarjetaEvaluada.es_correcta = null
-                        nuevasCajas[3].tarjetas.push(tarjetaEvaluada)
-
-                        break;
-                    case 4:
-                        tarjetaEvaluada.nivel = 5
-                        tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 30)
-                        tarjetaEvaluada.es_correcta = null
-                        nuevasCajas[4].tarjetas.push(tarjetaEvaluada)
-
-                        break;
-                    case 5:
-                        tarjetaEvaluada.nivel = 5
-                        tarjetaEvaluada.proxima_revision.setDate(tarjetaEvaluada.ultima_revision.getDate() + 30)
-                        tarjetaEvaluada.es_correcta = null
-                        nuevasCajas[4].tarjetas.push(tarjetaEvaluada)
-
-                        break;
-                    default:
-                        break;
-                }
-            } else {
-
-                tarjetaEvaluada.ultima_revision = new Date()
-                const proximaRevision: Date = new Date(tarjetaEvaluada.ultima_revision)
-
-                proximaRevision.setDate(proximaRevision.getDate() + 1)
-                tarjetaEvaluada.proxima_revision = proximaRevision
-            
-                tarjetaEvaluada.nivel = 1
+            // Sin evaluar en esta sesión: se queda en su caja actual sin cambios.
+            if (tarjetaEvaluada.es_correcta !== true && tarjetaEvaluada.es_correcta !== false) {
                 tarjetaEvaluada.es_correcta = null
-                nuevasCajas[0].tarjetas.push(tarjetaEvaluada)
-
+                nuevasCajas[indiceCaja].tarjetas.push(tarjetaEvaluada)
+                continue
             }
+
+            const nuevoNivel = tarjetaEvaluada.es_correcta
+                ? Math.min(nivelValido(tarjetaEvaluada.nivel) + 1, NIVEL_MAX)
+                : NIVEL_MIN
+
+            tarjetaEvaluada.nivel = nuevoNivel
+            tarjetaEvaluada.ultima_revision = fechaActual
+            tarjetaEvaluada.proxima_revision = sumarDias(fechaActual, DIAS_POR_NIVEL[nuevoNivel])
+            tarjetaEvaluada.es_correcta = null
+
+            nuevasCajas[nuevoNivel - 1].tarjetas.push(tarjetaEvaluada)
         }
-    }
+    })
 
     return nuevasCajas
 
@@ -124,12 +93,17 @@ function ordenarTarjetasEnCajas(datosTarjetas: ILeccion): ICaja[] {
 // SERVICES controladores de persistencia
 // =======================================
 
+async function buscarUsuario(usuarioId: string): Promise<UsuarioDocument> {
+    const usuario: UsuarioDocument | null = await Usuario.findById(usuarioId)
+    if (!usuario) throw new AppError("Usuario no encontrado", 404)
+    return usuario
+}
+
 // SERVICIO DE LECCIONES
 
 export const createLectionService = async (nombreLeccion: string, usuario_id: string): Promise<ILeccion> => {
 
-    const usuario: UsuarioDocument | null = await Usuario.findById(usuario_id)
-    if (!usuario) throw new AppError("Usuario no encontrado", 404)
+    const usuario = await buscarUsuario(usuario_id)
 
     const nombreDuplicado = usuario.lecciones.some(
         l => l.nombre.toLowerCase() === nombreLeccion.trim().toLowerCase()
@@ -144,36 +118,28 @@ export const createLectionService = async (nombreLeccion: string, usuario_id: st
         fechaCreacion: new Date(),
         cajas: crearCajasVacias()
     })
-    
+
     await usuario.save()
 
     const leccionGuardada = usuario.lecciones[usuario.lecciones.length - 1]
-    if(!leccionGuardada) throw new Error("Error al recuperar la lección.")
+    if (!leccionGuardada) throw new Error("Error al recuperar la lección.")
 
     return leccionGuardada.toObject()
 
 }
 
 export const getUserLectionsService = async (usuario_id: string): Promise<ILeccion[]> => {
-    try {
-        const usuario: UsuarioDocument | null = await Usuario.findById(usuario_id)
-        if (!usuario) throw new Error("Usuario no encontrado")
-
-        return usuario.lecciones
-
-    } catch (error) {
-        throw new Error(`Error al cargar las lecciones del usuario: ${error}`)
-    }
+    const usuario = await buscarUsuario(usuario_id)
+    return usuario.lecciones
 }
 
 export const deleteLeccionService = async (usuario_id: string, leccion_id: string): Promise<void> => {
 
-    const usuario: UsuarioDocument | null = await Usuario.findById(usuario_id)
-    if (!usuario) throw new Error("Usuario no encontrado")
+    const usuario = await buscarUsuario(usuario_id)
 
     const leccion = usuario.lecciones.id(leccion_id)
-
     if (!leccion) throw new AppError("Lección no encontrada.", 404)
+
     leccion.deleteOne()
     await usuario.save()
 }
@@ -182,16 +148,16 @@ export const deleteLeccionService = async (usuario_id: string, leccion_id: strin
 
 export const createCardService = async (usuarioId: string, leccionId: string, tarjetaDatos: TarjetaDTO): Promise<ITarjeta> => {
 
-    const { pregunta, respuesta } = tarjetaDatos
+    const pregunta = tarjetaDatos.pregunta?.trim()
+    const respuesta = tarjetaDatos.respuesta?.trim()
+    if (!pregunta || !respuesta) throw new AppError("La pregunta y la respuesta son obligatorias.", 400)
 
-    const usuario: UsuarioDocument | null = await Usuario.findById(usuarioId)
-    if (!usuario) throw new Error("Usuario no encontrado.")
+    const usuario = await buscarUsuario(usuarioId)
 
     const leccion = usuario.lecciones.id(leccionId)
-    if (!leccion) throw new Error("Lección no encontrada.")
+    if (!leccion) throw new AppError("Lección no encontrada.", 404)
 
-    const nuevaTarjeta = crearNuevaTarjeta(pregunta, respuesta)
-    leccion.cajas[0].tarjetas.push(nuevaTarjeta)
+    leccion.cajas[0].tarjetas.push(crearNuevaTarjeta(pregunta, respuesta))
 
     await usuario.save()
     const tarjetas = leccion.cajas[0].tarjetas
@@ -199,26 +165,25 @@ export const createCardService = async (usuarioId: string, leccionId: string, ta
 
 }
 
-export const updateBoxesService = async (usuarioId: string, datosTarjetas: ILeccion) => {
+export const updateBoxesService = async (usuarioId: string, datosTarjetas: Pick<ILeccion, '_id' | 'cajas'>) => {
 
     const cajasNuevas = datosTarjetas.cajas
 
-    if (!Array.isArray(cajasNuevas) || cajasNuevas.length !== 5) throw new Error("Se esperan exactamente 5 cajas")
-    
-    const usuario: UsuarioDocument | null = await Usuario.findById(usuarioId)
-    if (!usuario) throw new Error("Usuario no encontrado")
-    
-    if (!datosTarjetas._id) throw new Error("La lección no tiene ID")
-    
-    const leccion = usuario.lecciones.find(l => l._id.toString() === datosTarjetas._id?.toString())
-    if (!leccion) throw new Error("Lección no encontrada")
+    if (!Array.isArray(cajasNuevas) || cajasNuevas.length !== 5) throw new AppError("Se esperan exactamente 5 cajas", 400)
+
+    if (!datosTarjetas._id) throw new AppError("La lección no tiene ID", 400)
+
+    const usuario = await buscarUsuario(usuarioId)
+
+    const leccion = usuario.lecciones.id(datosTarjetas._id)
+    if (!leccion) throw new AppError("Lección no encontrada", 404)
 
     const cajasOrdenadas = ordenarTarjetasEnCajas(datosTarjetas)
-    leccion.set({cajas: cajasOrdenadas})
+    leccion.set({ cajas: cajasOrdenadas })
     await usuario.save()
 
     return leccion
-    
+
 }
 
 export const deleteCardService = async (usuarioId: string, tarjetaId: string) => {
@@ -228,8 +193,8 @@ export const deleteCardService = async (usuarioId: string, tarjetaId: string) =>
         { $pull: { "lecciones.$[].cajas.$[].tarjetas": { _id: tarjetaId } } }
     )
 
-    if (resultado.modifiedCount === 0) throw new Error("Tarjeta no encontrada")
+    if (resultado.modifiedCount === 0) throw new AppError("Tarjeta no encontrada", 404)
 
     return resultado
-    
+
 }
