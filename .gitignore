@@ -1,2 +1,25 @@
+# Dependencias
 node_modules/
+
+# Build de TypeScript
+dist/
+*.tsbuildinfo
+
+# Variables de entorno (contienen MONGO_URI y JWT_SECRET)
 .env
+.env.*
+!.env.example
+
+# Tests
+coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor y sistema operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
