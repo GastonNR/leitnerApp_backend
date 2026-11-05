@@ -11,7 +11,7 @@ const NIVEL_MIN = 1
 const NIVEL_MAX = 5
 
 // Días hasta la próxima revisión según el nivel al que pasa la tarjeta.
-const DIAS_POR_NIVEL: Record<number, number> = {
+export const DIAS_POR_NIVEL: Record<number, number> = {
     1: 1,
     2: 3,
     3: 7,
@@ -42,7 +42,7 @@ function nivelValido(nivel: unknown): number {
     return Math.min(Math.max(n, NIVEL_MIN), NIVEL_MAX)
 }
 
-function crearNuevaTarjeta(pregunta: string, respuesta: string): ITarjeta {
+export function crearNuevaTarjeta(pregunta: string, respuesta: string): ITarjeta {
 
     const fechaActual: Date = new Date()
 
@@ -56,7 +56,7 @@ function crearNuevaTarjeta(pregunta: string, respuesta: string): ITarjeta {
     }
 }
 
-function ordenarTarjetasEnCajas(datosTarjetas: Pick<ILeccion, 'cajas'>): ICaja[] {
+export function ordenarTarjetasEnCajas(datosTarjetas: Pick<ILeccion, 'cajas'>): ICaja[] {
 
     const nuevasCajas: ICaja[] = crearCajasVacias()
     const fechaActual: Date = new Date()
