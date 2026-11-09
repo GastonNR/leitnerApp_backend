@@ -6,9 +6,12 @@ import {
     deleteAsignaturaService,
     deleteTemaService,
     getAsignaturasService,
-    guardarSesionService
+    guardarSesionService,
+    renameAsignaturaService,
+    renameTemaService,
+    moveTemaService
 } from "../services/asignaturas.service.js"
-import type { AsignaturaParams, GuardarSesionBody, NombreBody, TemaParams } from "../types/estudio.types.js"
+import type { AsignaturaParams, GuardarSesionBody, MoverTemaBody, NombreBody, TemaParams } from "../types/estudio.types.js"
 import { responderError } from "../utils/responderError.js"
 
 const idInvalido = (res: Response, que: string): Response =>
@@ -51,6 +54,25 @@ const crearAsignatura = async (req: Request<{}, {}, NombreBody>, res: Response):
     }
 }
 
+// PATCH /api/asignaturas/:asignaturaId  { nombre }
+// Renombra la asignatura.
+const renombrarAsignatura = async (req: Request<AsignaturaParams, {}, NombreBody>, res: Response): Promise<Response> => {
+
+    if (!req.usuario) return noAutorizado(res)
+
+    const { asignaturaId } = req.params
+    if (!isValidObjectId(asignaturaId)) return idInvalido(res, 'asignatura')
+
+    const nombre = nombreValido(req.body?.nombre)
+    if (!nombre) return res.status(400).json({ ok: false, message: "El nombre de la asignatura es requerido" })
+
+    try {
+        return res.json(await renameAsignaturaService(req.usuario.id, asignaturaId, nombre))
+    } catch (error) {
+        return responderError(res, error, "Error al renombrar la asignatura")
+    }
+}
+
 // DELETE /api/asignaturas/:asignaturaId
 // Borra la asignatura con todos sus temas y tarjetas.
 const eliminarAsignatura = async (req: Request<AsignaturaParams>, res: Response): Promise<Response> => {
@@ -84,6 +106,44 @@ const crearTema = async (req: Request<AsignaturaParams, {}, NombreBody>, res: Re
         return res.status(201).json(await createTemaService(req.usuario.id, asignaturaId, nombre))
     } catch (error) {
         return responderError(res, error, "Error al crear el tema")
+    }
+}
+
+// PATCH /api/temas/:temaId  { nombre }
+// Renombra el tema (sus cajas y tarjetas no cambian).
+const renombrarTema = async (req: Request<TemaParams, {}, NombreBody>, res: Response): Promise<Response> => {
+
+    if (!req.usuario) return noAutorizado(res)
+
+    const { temaId } = req.params
+    if (!isValidObjectId(temaId)) return idInvalido(res, 'tema')
+
+    const nombre = nombreValido(req.body?.nombre)
+    if (!nombre) return res.status(400).json({ ok: false, message: "El nombre del tema es requerido" })
+
+    try {
+        return res.json(await renameTemaService(req.usuario.id, temaId, nombre))
+    } catch (error) {
+        return responderError(res, error, "Error al renombrar el tema")
+    }
+}
+
+// PATCH /api/temas/:temaId/asignatura  { asignaturaId }
+// Mueve el tema (con sus tarjetas y progreso) a otra asignatura.
+const moverTema = async (req: Request<TemaParams, {}, MoverTemaBody>, res: Response): Promise<Response> => {
+
+    if (!req.usuario) return noAutorizado(res)
+
+    const { temaId } = req.params
+    if (!isValidObjectId(temaId)) return idInvalido(res, 'tema')
+
+    const asignaturaId = req.body?.asignaturaId
+    if (!isValidObjectId(asignaturaId)) return idInvalido(res, 'asignatura')
+
+    try {
+        return res.json(await moveTemaService(req.usuario.id, temaId, asignaturaId))
+    } catch (error) {
+        return responderError(res, error, "Error al mover el tema")
     }
 }
 
@@ -122,8 +182,11 @@ const guardarSesion = async (req: Request<TemaParams, {}, GuardarSesionBody>, re
 export {
     cargarAsignaturas,
     crearAsignatura,
+    renombrarAsignatura,
     eliminarAsignatura,
     crearTema,
+    renombrarTema,
+    moverTema,
     eliminarTema,
     guardarSesion,
 }

@@ -49,6 +49,15 @@ export interface IImagen{
     fechaCreacion: Date
 }
 
+export interface IRepaso{
+    _id?: Types.ObjectId
+    usuario: Types.ObjectId
+    tema: Types.ObjectId
+    fecha: Date
+    aciertos: number
+    fallos: number
+}
+
 // SUBDOCUMENTOS MONGOOSE
 export type AsignaturaSubdocument = Types.Subdocument<Types.ObjectId> & {
     nombre: string

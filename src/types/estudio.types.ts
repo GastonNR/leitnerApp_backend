@@ -19,6 +19,11 @@ export interface NombreBody{
     nombre: string
 }
 
+// Mover un tema a otra asignatura
+export interface MoverTemaBody{
+    asignaturaId: string
+}
+
 // Guardar una sesión de estudio de un tema
 export interface GuardarSesionBody{
     cajas: Array<ICaja>

@@ -4,6 +4,7 @@ import asignaturas_routes from './asignaturas.routes.js'
 import temas_routes from './temas.routes.js'
 import tarjetas_routes from './tarjetas.routes.js'
 import imagenes_routes from './imagenes.routes.js'
+import repasos_routes from './repasos.routes.js'
 
 const routes = Router()
 
@@ -12,5 +13,6 @@ routes.use('/asignaturas', asignaturas_routes)
 routes.use('/temas', temas_routes)
 routes.use('/tarjetas', tarjetas_routes)
 routes.use('/imagenes', imagenes_routes)
+routes.use('/repasos', repasos_routes)
 
 export default routes

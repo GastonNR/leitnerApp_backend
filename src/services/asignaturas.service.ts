@@ -4,6 +4,7 @@ import { IAsignatura, ICaja, ITema } from "../types/models.types.js"
 import { buscarAsignatura, buscarTema, buscarUsuario, mismoNombre } from "./buscar.js"
 import { eliminarImagenesService } from "./imagenes.service.js"
 import { crearCajasVacias, imagenesDeTema, ordenarTarjetasEnCajas } from "./leitner.js"
+import { contarRespuestas, eliminarRepasosDeTemas, registrarRepaso } from "./repasos.service.js"
 
 // ==========================================
 // ASIGNATURAS
@@ -28,6 +29,22 @@ export const createAsignaturaService = async (usuarioId: string, nombre: string)
     return usuario.asignaturas[usuario.asignaturas.length - 1].toObject()
 }
 
+// Cambia el nombre. Puede quedar igual o cambiar solo mayúsculas; no puede
+// coincidir con el de otra asignatura.
+export const renameAsignaturaService = async (usuarioId: string, asignaturaId: string, nombre: string): Promise<IAsignatura> => {
+
+    const usuario = await buscarUsuario(usuarioId)
+    const asignatura = buscarAsignatura(usuario, asignaturaId)
+
+    if (usuario.asignaturas.some(a => !a._id.equals(asignatura._id) && mismoNombre(a.nombre, nombre))) {
+        throw new AppError("Ya existe una asignatura con ese nombre", 409)
+    }
+
+    asignatura.nombre = nombre.trim()
+    await usuario.save()
+    return asignatura.toObject()
+}
+
 // Borra la asignatura con todos sus temas, tarjetas e imágenes.
 export const deleteAsignaturaService = async (usuarioId: string, asignaturaId: string): Promise<void> => {
 
@@ -35,10 +52,12 @@ export const deleteAsignaturaService = async (usuarioId: string, asignaturaId: s
     const asignatura = buscarAsignatura(usuario, asignaturaId)
 
     const imagenes = asignatura.temas.flatMap(imagenesDeTema)
+    const temas = asignatura.temas.map(t => t._id)
 
     asignatura.deleteOne()
     await usuario.save()
     await eliminarImagenesService(usuarioId, imagenes)
+    await eliminarRepasosDeTemas(usuarioId, temas)
 }
 
 // ==========================================
@@ -62,6 +81,44 @@ export const createTemaService = async (usuarioId: string, asignaturaId: string,
     return asignatura.temas[asignatura.temas.length - 1].toObject()
 }
 
+// Cambia el nombre del tema; no puede coincidir con otro de la misma asignatura.
+// Sus cajas y tarjetas no cambian.
+export const renameTemaService = async (usuarioId: string, temaId: string, nombre: string): Promise<ITema> => {
+
+    const usuario = await buscarUsuario(usuarioId)
+    const { asignatura, tema } = buscarTema(usuario, temaId)
+
+    if (asignatura.temas.some(t => !t._id.equals(tema._id) && mismoNombre(t.nombre, nombre))) {
+        throw new AppError("Ya existe un tema con ese nombre en la asignatura", 409)
+    }
+
+    tema.nombre = nombre.trim()
+    await usuario.save()
+    return tema.toObject()
+}
+
+// Pasa el tema a otra asignatura del usuario, con sus cajas, tarjetas y
+// progreso (el tema y sus tarjetas conservan sus _id). Va al final de la lista.
+export const moveTemaService = async (usuarioId: string, temaId: string, asignaturaDestinoId: string): Promise<ITema> => {
+
+    const usuario = await buscarUsuario(usuarioId)
+    const { asignatura: origen, tema } = buscarTema(usuario, temaId)
+    const destino = buscarAsignatura(usuario, asignaturaDestinoId)
+
+    if (origen._id.equals(destino._id)) return tema.toObject()
+
+    if (destino.temas.some(t => mismoNombre(t.nombre, tema.nombre))) {
+        throw new AppError(`Ya existe un tema llamado «${tema.nombre}» en «${destino.nombre}»`, 409)
+    }
+
+    const datos = tema.toObject()
+    tema.deleteOne()
+    destino.temas.push(datos)
+    await usuario.save()
+
+    return destino.temas[destino.temas.length - 1].toObject()
+}
+
 export const deleteTemaService = async (usuarioId: string, temaId: string): Promise<void> => {
 
     const usuario = await buscarUsuario(usuarioId)
@@ -72,6 +129,7 @@ export const deleteTemaService = async (usuarioId: string, temaId: string): Prom
     tema.deleteOne()
     await usuario.save()
     await eliminarImagenesService(usuarioId, imagenes)
+    await eliminarRepasosDeTemas(usuarioId, [tema._id])
 }
 
 // Guarda una sesión de estudio del tema: aplica el algoritmo Leitner a sus cajas.
@@ -95,8 +153,12 @@ export const guardarSesionService = async (usuarioId: string, temaId: string, ca
         }
     }
 
+    // Se cuenta antes de ordenar: el algoritmo vuelve es_correcta a null.
+    const { aciertos, fallos } = contarRespuestas(cajasNuevas)
+
     tema.set({ cajas: ordenarTarjetasEnCajas({ cajas: cajasNuevas }) })
     await usuario.save()
+    await registrarRepaso(usuarioId, tema._id, aciertos, fallos)
 
     // Imágenes de tarjetas que ya no están en el tema guardado.
     const siguen = new Set(imagenesDeTema(tema))

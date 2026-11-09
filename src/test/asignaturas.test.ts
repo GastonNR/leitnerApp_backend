@@ -72,8 +72,11 @@ describe('autenticación', () => {
     it.each([
         ['get', '/api/asignaturas'],
         ['post', '/api/asignaturas'],
+        ['patch', `/api/asignaturas/${id()}`],
         ['delete', `/api/asignaturas/${id()}`],
         ['post', `/api/asignaturas/${id()}/temas`],
+        ['patch', `/api/temas/${id()}`],
+        ['patch', `/api/temas/${id()}/asignatura`],
         ['delete', `/api/temas/${id()}`],
         ['put', `/api/temas/${id()}/cajas`],
         ['post', `/api/temas/${id()}/tarjetas`],
@@ -161,6 +164,54 @@ describe('asignaturas', () => {
     })
 })
 
+describe('renombrar asignaturas', () => {
+
+    const renombrar = (id: string, nombre: unknown, t = token) =>
+        api().patch(`/api/asignaturas/${id}`).set(auth(t)).send({ nombre })
+
+    it('cambia el nombre (recortado) y conserva sus temas', async () => {
+        const asignatura = await crearAsignatura('Ingles')
+        const tema = await crearTema(asignatura._id)
+
+        const res = await renombrar(asignatura._id, '  Inglés ')
+
+        expect(res.status).toBe(200)
+        expect(res.body).toMatchObject({ _id: asignatura._id, nombre: 'Inglés' })
+        const [guardada] = await asignaturasActuales()
+        expect(guardada.nombre).toBe('Inglés')
+        expect(guardada.temas.map((t: { _id: string }) => t._id)).toEqual([tema._id])
+    })
+
+    it('permite cambiar solo mayúsculas, pero no usar el nombre de otra asignatura', async () => {
+        const ingles = await crearAsignatura('inglés')
+        await crearAsignatura('Biología')
+
+        await renombrar(ingles._id, 'Inglés').expect(200)
+
+        const repetido = await renombrar(ingles._id, 'BIOLOGÍA')
+        expect(repetido.status).toBe(409)
+        expect(repetido.body.message).toBe('Ya existe una asignatura con ese nombre')
+    })
+
+    it('responde 400 sin nombre o con id mal formado, y 404 si no existe', async () => {
+        const asignatura = await crearAsignatura()
+
+        await renombrar(asignatura._id, '  ').expect(400)
+        await renombrar(asignatura._id, 5).expect(400)
+        await renombrar('xyz', 'Nueva').expect(400)
+        await renombrar(idInexistente(), 'Nueva').expect(404)
+    })
+
+    it('un usuario no puede renombrar la asignatura de otro', async () => {
+        const asignatura = await crearAsignatura('Mía')
+        const tokenOtro = await otroUsuario()
+
+        await renombrar(asignatura._id, 'Robada', tokenOtro).expect(404)
+        const [guardada] = await asignaturasActuales()
+        expect(guardada.nombre).toBe('Mía')
+    })
+})
+
 describe('temas', () => {
 
     it('crea un tema con 5 cajas vacías dentro de la asignatura', async () => {
@@ -224,6 +275,135 @@ describe('temas', () => {
 
         const [guardada] = await asignaturasActuales()
         expect(guardada.temas).toHaveLength(1)
+    })
+})
+
+describe('renombrar temas', () => {
+
+    const renombrar = (id: string, nombre: unknown, t = token) =>
+        api().patch(`/api/temas/${id}`).set(auth(t)).send({ nombre })
+
+    it('cambia el nombre y conserva cajas, tarjetas y progreso', async () => {
+        const tema = await crearTemaNuevo()
+        const tarjeta = await crearTarjeta(tema._id)
+        const antes = await temaActual()
+
+        const res = await renombrar(tema._id, ' Verbos irregulares ')
+
+        expect(res.status).toBe(200)
+        expect(res.body).toMatchObject({ _id: tema._id, nombre: 'Verbos irregulares' })
+        const despues = await temaActual()
+        expect(despues.cajas).toEqual(antes.cajas)
+        expect(despues.cajas[0].tarjetas[0]._id).toBe(tarjeta._id)
+    })
+
+    it('no repite nombres dentro de la asignatura, pero sí entre asignaturas', async () => {
+        const ingles = await crearAsignatura('Inglés')
+        const frances = await crearAsignatura('Francés')
+        const a = await crearTema(ingles._id, 'A')
+        await crearTema(ingles._id, 'B')
+        await crearTema(frances._id, 'C')
+
+        const repetido = await renombrar(a._id, 'b')
+        expect(repetido.status).toBe(409)
+        expect(repetido.body.message).toBe('Ya existe un tema con ese nombre en la asignatura')
+
+        await renombrar(a._id, 'C').expect(200)
+        await renombrar(a._id, 'c').expect(200)
+    })
+
+    it('responde 400 sin nombre o con id mal formado, y 404 si no existe', async () => {
+        const tema = await crearTemaNuevo()
+
+        await renombrar(tema._id, '').expect(400)
+        await renombrar('xyz', 'Nuevo').expect(400)
+        await renombrar(idInexistente(), 'Nuevo').expect(404)
+    })
+
+    it('un usuario no puede renombrar el tema de otro', async () => {
+        const tema = await crearTemaNuevo()
+        const tokenOtro = await otroUsuario()
+
+        await renombrar(tema._id, 'Robado', tokenOtro).expect(404)
+        expect((await temaActual()).nombre).toBe(tema.nombre)
+    })
+})
+
+describe('mover temas', () => {
+
+    const mover = (temaId: string, asignaturaId: unknown, t = token) =>
+        api().patch(`/api/temas/${temaId}/asignatura`).set(auth(t)).send({ asignaturaId })
+
+    it('pasa el tema a otra asignatura con sus tarjetas, progreso e ids', async () => {
+        const ingles = await crearAsignatura('Inglés')
+        const frances = await crearAsignatura('Francés')
+        const tema = await crearTema(ingles._id, 'Verbos')
+        await crearTema(frances._id, 'Saludos')
+        const tarjeta = await crearTarjeta(tema._id)
+        const [antes] = await asignaturasActuales()
+
+        const res = await mover(tema._id, frances._id)
+
+        expect(res.status).toBe(200)
+        expect(res.body._id).toBe(tema._id)
+        const [origen, destino] = await asignaturasActuales()
+        expect(origen.temas).toEqual([])
+        expect(destino.temas.map((t: { nombre: string }) => t.nombre)).toEqual(['Saludos', 'Verbos'])
+        expect(destino.temas[1]).toEqual(antes.temas[0])
+
+        // Sigue funcionando con los mismos ids
+        await crearTarjeta(tema._id, 'eat', 'comer')
+        await api().delete(`/api/tarjetas/${tarjeta._id}`).set(auth(token)).expect(204)
+    })
+
+    it('a la misma asignatura no cambia nada', async () => {
+        const asignatura = await crearAsignatura()
+        const a = await crearTema(asignatura._id, 'A')
+        await crearTema(asignatura._id, 'B')
+
+        await mover(a._id, asignatura._id).expect(200)
+
+        const [guardada] = await asignaturasActuales()
+        expect(guardada.temas.map((t: { nombre: string }) => t.nombre)).toEqual(['A', 'B'])
+    })
+
+    it('responde 409 si el destino ya tiene un tema con ese nombre, sin mover nada', async () => {
+        const ingles = await crearAsignatura('Inglés')
+        const frances = await crearAsignatura('Francés')
+        const tema = await crearTema(ingles._id, 'Verbos')
+        await crearTema(frances._id, 'VERBOS')
+
+        const res = await mover(tema._id, frances._id)
+
+        expect(res.status).toBe(409)
+        expect(res.body.message).toBe('Ya existe un tema llamado «Verbos» en «Francés»')
+        const [origen] = await asignaturasActuales()
+        expect(origen.temas).toHaveLength(1)
+    })
+
+    it('responde 400 con ids mal formados y 404 si el tema o la asignatura no existen', async () => {
+        const asignatura = await crearAsignatura()
+        const tema = await crearTema(asignatura._id)
+
+        await mover('xyz', asignatura._id).expect(400)
+        await mover(tema._id, 'xyz').expect(400)
+        await mover(tema._id, undefined).expect(400)
+        await mover(idInexistente(), asignatura._id).expect(404)
+        await mover(tema._id, idInexistente()).expect(404)
+    })
+
+    it('no se puede mover a la asignatura de otro usuario ni mover sus temas', async () => {
+        const mia = await crearAsignatura('Mía')
+        const tema = await crearTema(mia._id)
+        const tokenOtro = await otroUsuario()
+        const ajena = (await api().post('/api/asignaturas').set(auth(tokenOtro)).send({ nombre: 'Ajena' })).body
+
+        await mover(tema._id, ajena._id).expect(404)
+        await mover(tema._id, ajena._id, tokenOtro).expect(404)
+
+        const [guardada] = await asignaturasActuales()
+        expect(guardada.temas).toHaveLength(1)
+        expect(await asignaturasActuales(tokenOtro)).toEqual([expect.objectContaining({ temas: [] })])
     })
 })
 
