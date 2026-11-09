@@ -1,5 +1,6 @@
 import { RequestHandler, Router } from 'express'
 import verificarToken from '../middleware/verificarToken.js'
+import subirImagen from '../middleware/subirImagen.js'
 
 import {
     cargarLecciones, // => Se realiza al comienzo cuando el usuario se logea. Se carga el usuariojunto con sus lecciones
@@ -21,7 +22,8 @@ lection_routes.delete('/:id', verificarToken, eliminarLeccion)
 //lection_routes.put('/:leccionId', verificarToken, guardarLeccion)
 
 // Tarjetas
-lection_routes.post('/leccion/:leccion_id', verificarToken, crearTarjeta)
+// Acepta JSON o multipart/form-data (pregunta, respuesta e "imagen" opcional)
+lection_routes.post('/leccion/:leccion_id', verificarToken, subirImagen, crearTarjeta)
 lection_routes.delete('/leccion/:tarjetaId',  verificarToken, eliminarTarjeta)
 
 export default lection_routes

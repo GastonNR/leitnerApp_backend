@@ -2,6 +2,8 @@ import Usuario from "../models/Usuarios.js"
 import { AppError } from "../types/AppError.js"
 import { TarjetaDTO } from "../types/lecciones.types.js"
 import { ICaja, ILeccion, ITarjeta, UsuarioDocument } from "../types/models.types.js"
+import { eliminarImagenesService, guardarImagenService } from "./imagenes.service.js"
+import { Types } from "mongoose"
 
 // ==========================
 // DOMAIN reglas del sistema
@@ -42,7 +44,7 @@ function nivelValido(nivel: unknown): number {
     return Math.min(Math.max(n, NIVEL_MIN), NIVEL_MAX)
 }
 
-export function crearNuevaTarjeta(pregunta: string, respuesta: string): ITarjeta {
+export function crearNuevaTarjeta(pregunta: string, respuesta: string, imagen: Types.ObjectId | null = null): ITarjeta {
 
     const fechaActual: Date = new Date()
 
@@ -52,8 +54,14 @@ export function crearNuevaTarjeta(pregunta: string, respuesta: string): ITarjeta
         nivel: NIVEL_MIN,
         ultima_revision: fechaActual,
         proxima_revision: sumarDias(fechaActual, DIAS_POR_NIVEL[NIVEL_MIN]),
-        es_correcta: null
+        es_correcta: null,
+        imagen
     }
+}
+
+// Ids de las imágenes de todas las tarjetas de una lección.
+function imagenesDeLeccion(leccion: Pick<ILeccion, 'cajas'>): string[] {
+    return leccion.cajas.flatMap(c => c.tarjetas ?? []).map(t => t.imagen?.toString()).filter((id): id is string => !!id)
 }
 
 export function ordenarTarjetasEnCajas(datosTarjetas: Pick<ILeccion, 'cajas'>): ICaja[] {
@@ -140,13 +148,16 @@ export const deleteLeccionService = async (usuario_id: string, leccion_id: strin
     const leccion = usuario.lecciones.id(leccion_id)
     if (!leccion) throw new AppError("Lección no encontrada.", 404)
 
+    const imagenes = imagenesDeLeccion(leccion)
+
     leccion.deleteOne()
     await usuario.save()
+    await eliminarImagenesService(usuario_id, imagenes)
 }
 
 // SERVICIOS DE TARJETAS
 
-export const createCardService = async (usuarioId: string, leccionId: string, tarjetaDatos: TarjetaDTO): Promise<ITarjeta> => {
+export const createCardService = async (usuarioId: string, leccionId: string, tarjetaDatos: TarjetaDTO, imagen?: Buffer): Promise<ITarjeta> => {
 
     const pregunta = tarjetaDatos.pregunta?.trim()
     const respuesta = tarjetaDatos.respuesta?.trim()
@@ -157,9 +168,18 @@ export const createCardService = async (usuarioId: string, leccionId: string, ta
     const leccion = usuario.lecciones.id(leccionId)
     if (!leccion) throw new AppError("Lección no encontrada.", 404)
 
-    leccion.cajas[0].tarjetas.push(crearNuevaTarjeta(pregunta, respuesta))
+    // La imagen se guarda primero; si la tarjeta no llega a guardarse, se borra
+    // para no dejar imágenes huérfanas.
+    const imagenId = imagen ? await guardarImagenService(usuarioId, imagen) : null
 
-    await usuario.save()
+    try {
+        leccion.cajas[0].tarjetas.push(crearNuevaTarjeta(pregunta, respuesta, imagenId))
+        await usuario.save()
+    } catch (error) {
+        await eliminarImagenesService(usuarioId, [imagenId])
+        throw error
+    }
+
     const tarjetas = leccion.cajas[0].tarjetas
     return tarjetas[tarjetas.length - 1]
 
@@ -178,9 +198,27 @@ export const updateBoxesService = async (usuarioId: string, datosTarjetas: Pick<
     const leccion = usuario.lecciones.id(datosTarjetas._id)
     if (!leccion) throw new AppError("Lección no encontrada", 404)
 
+    // La imagen de cada tarjeta la decide el servidor, no el cliente: se toma de la
+    // tarjeta guardada con el mismo _id. Así el cliente no puede perderla ni
+    // apuntar a imágenes de otro.
+    const imagenAnterior = new Map<string, Types.ObjectId | null>()
+    for (const caja of leccion.cajas) {
+        for (const t of caja.tarjetas) imagenAnterior.set(t._id.toString(), t.imagen ?? null)
+    }
+    for (const caja of cajasNuevas) {
+        for (const t of caja?.tarjetas ?? []) {
+            t.imagen = (t._id && imagenAnterior.get(String(t._id))) || null
+        }
+    }
+
     const cajasOrdenadas = ordenarTarjetasEnCajas(datosTarjetas)
     leccion.set({ cajas: cajasOrdenadas })
     await usuario.save()
+
+    // Imágenes de tarjetas que ya no están en la lección guardada.
+    const siguen = new Set(imagenesDeLeccion(leccion))
+    const huerfanas = [...imagenAnterior.values()].map(id => id?.toString()).filter(id => id && !siguen.has(id))
+    await eliminarImagenesService(usuarioId, huerfanas)
 
     return leccion
 
@@ -188,12 +226,23 @@ export const updateBoxesService = async (usuarioId: string, datosTarjetas: Pick<
 
 export const deleteCardService = async (usuarioId: string, tarjetaId: string) => {
 
+    // Antes del $pull se busca la imagen de la tarjeta, para borrarla también.
+    const usuario = await Usuario.findOne(
+        { _id: usuarioId, "lecciones.cajas.tarjetas._id": tarjetaId },
+        { "lecciones.cajas.tarjetas._id": 1, "lecciones.cajas.tarjetas.imagen": 1 }
+    ).lean()
+    const tarjeta = usuario?.lecciones
+        .flatMap(l => l.cajas).flatMap(c => c.tarjetas)
+        .find(t => t._id?.toString() === tarjetaId)
+
     const resultado = await Usuario.updateOne(
         { _id: usuarioId },
         { $pull: { "lecciones.$[].cajas.$[].tarjetas": { _id: tarjetaId } } }
     )
 
     if (resultado.modifiedCount === 0) throw new AppError("Tarjeta no encontrada", 404)
+
+    await eliminarImagenesService(usuarioId, [tarjeta?.imagen])
 
     return resultado
 

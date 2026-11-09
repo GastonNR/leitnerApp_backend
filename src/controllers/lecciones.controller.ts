@@ -119,7 +119,7 @@ const crearTarjeta = async (req: Request<CrearTarjetaParams, {}, CrearTarjetaBod
     const { pregunta, respuesta } = req.body ?? {}
 
     try {
-        const tarjetaGuardada = await createCardService(req.usuario.id, leccion_id, { pregunta, respuesta })
+        const tarjetaGuardada = await createCardService(req.usuario.id, leccion_id, { pregunta, respuesta }, req.file?.buffer)
         return res.status(201).json(tarjetaGuardada)
 
     } catch (error) {

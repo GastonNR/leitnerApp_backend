@@ -175,6 +175,7 @@ describe('crearNuevaTarjeta', () => {
             ultima_revision: HOY,
             proxima_revision: diasDespuesDeHoy(DIAS_POR_NIVEL[1]),
             es_correcta: null,
+            imagen: null,
         })
     })
 })

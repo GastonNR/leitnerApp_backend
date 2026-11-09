@@ -9,6 +9,8 @@ export interface ITarjeta{
     ultima_revision: Date
     proxima_revision: Date
     es_correcta: boolean | null
+    /* _id de la imagen (colección "imagenes") asociada a la pregunta, si tiene. */
+    imagen?: Types.ObjectId | null
 }
 
 export interface ICaja{
@@ -29,6 +31,15 @@ export interface IUsuarios{
     email: string
     password: string
     lecciones: ILeccion[]
+}
+
+export interface IImagen{
+    _id?: Types.ObjectId
+    usuario: Types.ObjectId
+    datos: Buffer
+    tipo: string
+    tamano: number
+    fechaCreacion: Date
 }
 
 // SUBDOCUMENTOS MONGOOSE
