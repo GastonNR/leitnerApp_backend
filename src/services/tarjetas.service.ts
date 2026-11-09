@@ -1,0 +1,96 @@
+import Usuario from "../models/Usuarios.js"
+import { AppError } from "../types/AppError.js"
+import { TarjetaDTO } from "../types/estudio.types.js"
+import { ITarjeta } from "../types/models.types.js"
+import { buscarTema, buscarUsuario } from "./buscar.js"
+import { cargarTarjeta, eliminarImagenesService, guardarImagenService } from "./imagenes.service.js"
+import { crearNuevaTarjeta } from "./leitner.js"
+
+// Texto de pregunta/respuesta: sin espacios en los bordes y con saltos de línea
+// "\n" (los formularios multipart del navegador los envían como "\r\n").
+function limpiarTexto(texto: unknown): string {
+    return typeof texto === 'string' ? texto.replace(/\r\n?/g, '\n').trim() : ''
+}
+
+// Agrega una tarjeta a la caja 1 de un tema, con imagen opcional.
+export const createCardService = async (usuarioId: string, temaId: string, tarjetaDatos: TarjetaDTO, imagen?: Buffer): Promise<ITarjeta> => {
+
+    const pregunta = limpiarTexto(tarjetaDatos.pregunta)
+    const respuesta = limpiarTexto(tarjetaDatos.respuesta)
+    if (!pregunta || !respuesta) throw new AppError("La pregunta y la respuesta son obligatorias.", 400)
+
+    const usuario = await buscarUsuario(usuarioId)
+    const { tema } = buscarTema(usuario, temaId)
+
+    // La imagen se guarda primero; si la tarjeta no llega a guardarse, se borra
+    // para no dejar imágenes huérfanas.
+    const imagenId = imagen ? await guardarImagenService(usuarioId, imagen) : null
+
+    try {
+        tema.cajas[0].tarjetas.push(crearNuevaTarjeta(pregunta, respuesta, imagenId))
+        await usuario.save()
+    } catch (error) {
+        await eliminarImagenesService(usuarioId, [imagenId])
+        throw error
+    }
+
+    const tarjetas = tema.cajas[0].tarjetas
+    return tarjetas[tarjetas.length - 1].toObject()
+}
+
+export interface EdicionTarjeta extends TarjetaDTO {
+    quitarImagen?: boolean
+}
+
+// Cambia el texto de una tarjeta y, opcionalmente, su imagen (nueva o quitarla).
+// No toca el progreso: la tarjeta sigue en su caja, con su nivel y sus fechas.
+// Orden seguro: primero la imagen nueva, luego la tarjeta y recién al final
+// se borra la anterior.
+export const updateCardService = async (usuarioId: string, tarjetaId: string, datos: EdicionTarjeta, imagen?: Buffer): Promise<ITarjeta> => {
+
+    const pregunta = limpiarTexto(datos.pregunta)
+    const respuesta = limpiarTexto(datos.respuesta)
+    if (!pregunta || !respuesta) throw new AppError("La pregunta y la respuesta son obligatorias.", 400)
+
+    const { usuario, tarjeta } = await cargarTarjeta(usuarioId, tarjetaId)
+    const anterior = tarjeta.imagen ?? null
+    const cambiaImagen = !!imagen || !!datos.quitarImagen
+
+    const nueva = imagen ? await guardarImagenService(usuarioId, imagen) : null
+
+    try {
+        tarjeta.pregunta = pregunta
+        tarjeta.respuesta = respuesta
+        if (cambiaImagen) tarjeta.imagen = nueva
+        await usuario.save()
+    } catch (error) {
+        await eliminarImagenesService(usuarioId, [nueva])
+        throw error
+    }
+
+    if (cambiaImagen) await eliminarImagenesService(usuarioId, [anterior])
+    return tarjeta.toObject()
+}
+
+// Un id de tarjeta no dice en qué asignatura, tema ni caja está: se borra con un
+// $pull posicional sobre todas.
+export const deleteCardService = async (usuarioId: string, tarjetaId: string): Promise<void> => {
+
+    // Antes del $pull se busca la imagen de la tarjeta, para borrarla también.
+    const usuario = await Usuario.findOne(
+        { _id: usuarioId, "asignaturas.temas.cajas.tarjetas._id": tarjetaId },
+        { "asignaturas.temas.cajas.tarjetas._id": 1, "asignaturas.temas.cajas.tarjetas.imagen": 1 }
+    ).lean()
+    const tarjeta = usuario?.asignaturas
+        .flatMap(a => a.temas).flatMap(t => t.cajas).flatMap(c => c.tarjetas)
+        .find(t => t._id?.toString() === tarjetaId)
+
+    const resultado = await Usuario.updateOne(
+        { _id: usuarioId },
+        { $pull: { "asignaturas.$[].temas.$[].cajas.$[].tarjetas": { _id: tarjetaId } } }
+    )
+
+    if (resultado.modifiedCount === 0) throw new AppError("Tarjeta no encontrada", 404)
+
+    await eliminarImagenesService(usuarioId, [tarjeta?.imagen])
+}

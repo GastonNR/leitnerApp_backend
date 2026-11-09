@@ -28,7 +28,7 @@ describe('POST /api/usuarios/registro', () => {
         expect(guardado).not.toBeNull()
         expect(guardado!.password).not.toBe(USUARIO_DE_PRUEBA.password)
         expect(await bcrypt.compare(USUARIO_DE_PRUEBA.password, guardado!.password)).toBe(true)
-        expect(guardado!.lecciones).toHaveLength(0)
+        expect(guardado!.asignaturas).toHaveLength(0)
     })
 
     it('normaliza el email (espacios y mayúsculas)', async () => {

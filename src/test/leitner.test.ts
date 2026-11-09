@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals'
-import { ordenarTarjetasEnCajas, crearNuevaTarjeta, DIAS_POR_NIVEL } from '../services/lecciones.service.js'
+import { ordenarTarjetasEnCajas, crearNuevaTarjeta, DIAS_POR_NIVEL } from '../services/leitner.js'
 import type { ICaja, ITarjeta } from '../types/models.types.js'
 
 // "Hoy" fijo para que los tests sean deterministas.

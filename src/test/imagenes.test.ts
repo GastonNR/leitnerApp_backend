@@ -24,25 +24,33 @@ beforeEach(async () => {
     token = await registrarYLoguear()
 })
 
-async function crearLeccion(nombre = 'Inglés') {
-    const res = await api().post('/api/lecciones/leccion').set(auth(token)).send({ nuevaLeccion: nombre })
+// Crea una asignatura con ese nombre y un tema dentro; devuelve el tema.
+async function crearTema(nombre = 'Inglés') {
+    const asignatura = await api().post('/api/asignaturas').set(auth(token)).send({ nombre })
+    expect(asignatura.status).toBe(201)
+    const res = await api().post(`/api/asignaturas/${asignatura.body._id}/temas`).set(auth(token)).send({ nombre: 'General' })
     expect(res.status).toBe(201)
-    return res.body.nuevaLeccion
+    return res.body
 }
 
-function crearTarjetaConImagen(leccionId: string, imagen: Buffer, nombre = 'foto.png', t = token) {
+function crearTarjetaConImagen(temaId: string, imagen: Buffer, nombre = 'foto.png', t = token) {
     return api()
-        .post(`/api/lecciones/leccion/${leccionId}`)
+        .post(`/api/temas/${temaId}/tarjetas`)
         .set(auth(t))
         .field('pregunta', '¿Qué animal es?')
         .field('respuesta', 'Un perro')
         .attach('imagen', imagen, nombre)
 }
 
-async function leccionesActuales() {
-    const res = await api().get('/api/lecciones').set(auth(token)).expect(200)
-    return res.body
+// Todos los temas del usuario, en orden de creación.
+async function temasActuales() {
+    const res = await api().get('/api/asignaturas').set(auth(token)).expect(200)
+    return res.body.flatMap((a: { temas: unknown[] }) => a.temas)
 }
+
+// Guarda una sesión de estudio del tema (como el botón del frontend).
+const guardarSesion = (tema: { _id: string, cajas: unknown[] }) =>
+    api().put(`/api/temas/${tema._id}/cajas`).set(auth(token)).send({ cajas: tema.cajas })
 
 describe('detectarTipoImagen', () => {
     it('reconoce los formatos admitidos por su contenido', () => {
@@ -59,11 +67,11 @@ describe('detectarTipoImagen', () => {
     })
 })
 
-describe('POST /api/lecciones/leccion/:leccion_id con imagen', () => {
+describe('POST /api/temas/:temaId/tarjetas con imagen', () => {
 
     it('crea la tarjeta con su imagen y la imagen se puede descargar', async () => {
-        const leccion = await crearLeccion()
-        const res = await crearTarjetaConImagen(leccion._id, PNG)
+        const tema = await crearTema()
+        const res = await crearTarjetaConImagen(tema._id, PNG)
 
         expect(res.status).toBe(201)
         expect(res.body.pregunta).toBe('¿Qué animal es?')
@@ -77,47 +85,47 @@ describe('POST /api/lecciones/leccion/:leccion_id con imagen', () => {
     })
 
     it('sin imagen (JSON) la tarjeta se crea con imagen null', async () => {
-        const leccion = await crearLeccion()
-        const res = await api().post(`/api/lecciones/leccion/${leccion._id}`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
+        const tema = await crearTema()
+        const res = await api().post(`/api/temas/${tema._id}/tarjetas`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
         expect(res.status).toBe(201)
         expect(res.body.imagen).toBeNull()
     })
 
     it('rechaza archivos que no son imágenes aunque digan .png, y no crea la tarjeta', async () => {
-        const leccion = await crearLeccion()
-        const res = await crearTarjetaConImagen(leccion._id, Buffer.from('esto no es una imagen, es texto'), 'falsa.png')
+        const tema = await crearTema()
+        const res = await crearTarjetaConImagen(tema._id, Buffer.from('esto no es una imagen, es texto'), 'falsa.png')
 
         expect(res.status).toBe(415)
         expect(res.body.ok).toBe(false)
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         expect(l.cajas[0].tarjetas).toHaveLength(0)
         expect(await Imagen.countDocuments()).toBe(0)
     })
 
     it('rechaza SVG', async () => {
-        const leccion = await crearLeccion()
-        const res = await crearTarjetaConImagen(leccion._id, SVG, 'dibujo.svg')
+        const tema = await crearTema()
+        const res = await crearTarjetaConImagen(tema._id, SVG, 'dibujo.svg')
         expect(res.status).toBe(415)
     })
 
     it('rechaza imágenes de más de 2 MB', async () => {
-        const leccion = await crearLeccion()
+        const tema = await crearTema()
         const grande = Buffer.concat([PNG, Buffer.alloc(2 * 1024 * 1024)])
-        const res = await crearTarjetaConImagen(leccion._id, grande)
+        const res = await crearTarjetaConImagen(tema._id, grande)
         expect(res.status).toBe(413)
         expect(await Imagen.countDocuments()).toBe(0)
     })
 
-    it('no guarda la imagen si la lección no existe', async () => {
+    it('no guarda la imagen si el tema no existe', async () => {
         const res = await crearTarjetaConImagen(new Types.ObjectId().toString(), PNG)
         expect(res.status).toBe(404)
         expect(await Imagen.countDocuments()).toBe(0)
     })
 
     it('no guarda la imagen si falta la pregunta', async () => {
-        const leccion = await crearLeccion()
+        const tema = await crearTema()
         const res = await api()
-            .post(`/api/lecciones/leccion/${leccion._id}`)
+            .post(`/api/temas/${tema._id}/tarjetas`)
             .set(auth(token))
             .field('respuesta', 'Un perro')
             .attach('imagen', PNG, 'foto.png')
@@ -139,8 +147,8 @@ describe('GET /api/imagenes/:id', () => {
     })
 
     it('otro usuario no puede ver la imagen (404)', async () => {
-        const leccion = await crearLeccion()
-        const { body: tarjeta } = await crearTarjetaConImagen(leccion._id, PNG)
+        const tema = await crearTema()
+        const { body: tarjeta } = await crearTarjetaConImagen(tema._id, PNG)
 
         const otroToken = await registrarYLoguear({ nombre: 'otro', email: 'otro@example.com', password: 'clave-segura' })
         const res = await api().get(`/api/imagenes/${tarjeta.imagen}`).set(auth(otroToken))
@@ -151,62 +159,75 @@ describe('GET /api/imagenes/:id', () => {
 describe('la imagen sigue a la tarjeta', () => {
 
     it('sobrevive a una sesión de estudio aunque el cliente no la envíe', async () => {
-        const leccion = await crearLeccion()
-        const { body: tarjeta } = await crearTarjetaConImagen(leccion._id, PNG)
-        const [l] = await leccionesActuales()
+        const tema = await crearTema()
+        const { body: tarjeta } = await crearTarjetaConImagen(tema._id, PNG)
+        const [l] = await temasActuales()
 
         const t = { ...l.cajas[0].tarjetas[0], es_correcta: true }
         delete t.imagen
         l.cajas[0].tarjetas = [t]
 
-        const res = await api().put('/api/lecciones/leccion').set(auth(token)).send(l)
+        const res = await guardarSesion(l)
         expect(res.status).toBe(200)
         expect(res.body.cajas[1].tarjetas[0].imagen).toBe(tarjeta.imagen)
         expect(await Imagen.countDocuments()).toBe(1)
     })
 
     it('el cliente no puede asignar a una tarjeta la imagen de otra', async () => {
-        const leccion = await crearLeccion()
-        const { body: conImagen } = await crearTarjetaConImagen(leccion._id, PNG)
-        await api().post(`/api/lecciones/leccion/${leccion._id}`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
-        const [l] = await leccionesActuales()
+        const tema = await crearTema()
+        const { body: conImagen } = await crearTarjetaConImagen(tema._id, PNG)
+        await api().post(`/api/temas/${tema._id}/tarjetas`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
+        const [l] = await temasActuales()
 
         l.cajas[0].tarjetas = l.cajas[0].tarjetas.map((t: { pregunta: string }) =>
             t.pregunta === 'dog' ? { ...t, imagen: conImagen.imagen } : t
         )
 
-        const res = await api().put('/api/lecciones/leccion').set(auth(token)).send(l)
+        const res = await guardarSesion(l)
         const sinImagen = res.body.cajas[0].tarjetas.find((t: { pregunta: string }) => t.pregunta === 'dog')
         expect(sinImagen.imagen).toBeNull()
     })
 
     it('al borrar la tarjeta se borra su imagen', async () => {
-        const leccion = await crearLeccion()
-        const { body: tarjeta } = await crearTarjetaConImagen(leccion._id, PNG)
+        const tema = await crearTema()
+        const { body: tarjeta } = await crearTarjetaConImagen(tema._id, PNG)
         expect(await Imagen.countDocuments()).toBe(1)
 
-        await api().delete(`/api/lecciones/leccion/${tarjeta._id}`).set(auth(token)).expect(204)
+        await api().delete(`/api/tarjetas/${tarjeta._id}`).set(auth(token)).expect(204)
         expect(await Imagen.countDocuments()).toBe(0)
     })
 
-    it('al borrar la lección se borran sus imágenes, y no las de otras lecciones', async () => {
-        const ingles = await crearLeccion('Inglés')
-        const bio = await crearLeccion('Biología')
+    it('al borrar un tema se borran sus imágenes, y no las de otros temas', async () => {
+        const ingles = await crearTema('Inglés')
+        const bio = await crearTema('Biología')
         await crearTarjetaConImagen(ingles._id, PNG)
         await crearTarjetaConImagen(ingles._id, PNG)
         await crearTarjetaConImagen(bio._id, PNG)
 
-        await api().delete(`/api/lecciones/${ingles._id}`).set(auth(token)).expect(200)
+        await api().delete(`/api/temas/${ingles._id}`).set(auth(token)).expect(204)
+        expect(await Imagen.countDocuments()).toBe(1)
+    })
+
+    it('al borrar la asignatura se borran las imágenes de todos sus temas, y no las de otras', async () => {
+        const ingles = await crearTema('Inglés')
+        const bio = await crearTema('Biología')
+        const { body: [asignaturaIngles] } = await api().get('/api/asignaturas').set(auth(token))
+        const otroTema = await api().post(`/api/asignaturas/${asignaturaIngles._id}/temas`).set(auth(token)).send({ nombre: 'Verbos' })
+        await crearTarjetaConImagen(ingles._id, PNG)
+        await crearTarjetaConImagen(otroTema.body._id, PNG)
+        await crearTarjetaConImagen(bio._id, PNG)
+
+        await api().delete(`/api/asignaturas/${asignaturaIngles._id}`).set(auth(token)).expect(204)
         expect(await Imagen.countDocuments()).toBe(1)
     })
 
     it('si el guardado de sesión quita una tarjeta, su imagen se borra', async () => {
-        const leccion = await crearLeccion()
-        await crearTarjetaConImagen(leccion._id, PNG)
-        const [l] = await leccionesActuales()
+        const tema = await crearTema()
+        await crearTarjetaConImagen(tema._id, PNG)
+        const [l] = await temasActuales()
         l.cajas[0].tarjetas = []
 
-        await api().put('/api/lecciones/leccion').set(auth(token)).send(l).expect(200)
+        await guardarSesion(l).expect(200)
         expect(await Imagen.countDocuments()).toBe(0)
     })
 })
@@ -217,8 +238,8 @@ describe('imagen de una tarjeta existente', () => {
     const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(32)])
 
     async function tarjetaSinImagen() {
-        const leccion = await crearLeccion()
-        const res = await api().post(`/api/lecciones/leccion/${leccion._id}`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
+        const tema = await crearTema()
+        const res = await api().post(`/api/temas/${tema._id}/tarjetas`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
         return res.body
     }
 
@@ -241,14 +262,14 @@ describe('imagen de una tarjeta existente', () => {
         expect(res.body._id).toBe(tarjeta._id)
         expect(Types.ObjectId.isValid(res.body.imagen)).toBe(true)
 
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         expect(l.cajas[0].tarjetas[0].imagen).toBe(res.body.imagen)
         await api().get(`/api/imagenes/${res.body.imagen}`).set(auth(token)).expect(200)
     })
 
     it('reemplaza la imagen y borra la anterior', async () => {
-        const leccion = await crearLeccion()
-        const { body: tarjeta } = await crearTarjetaConImagen(leccion._id, PNG)
+        const tema = await crearTema()
+        const { body: tarjeta } = await crearTarjetaConImagen(tema._id, PNG)
 
         const res = await ponerImagen(tarjeta._id, JPEG, 'otra.jpg')
         expect(res.status).toBe(200)
@@ -272,13 +293,13 @@ describe('imagen de una tarjeta existente', () => {
     })
 
     it('si la imagen nueva no es válida, la tarjeta conserva la anterior', async () => {
-        const leccion = await crearLeccion()
-        const { body: tarjeta } = await crearTarjetaConImagen(leccion._id, PNG)
+        const tema = await crearTema()
+        const { body: tarjeta } = await crearTarjetaConImagen(tema._id, PNG)
 
         const res = await ponerImagen(tarjeta._id, Buffer.from('<svg></svg> no soy imagen'), 'x.svg')
         expect(res.status).toBe(415)
 
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         expect(l.cajas[0].tarjetas[0].imagen).toBe(tarjeta.imagen)
         expect(await Imagen.countDocuments()).toBe(1)
     })
@@ -301,27 +322,27 @@ describe('imagen de una tarjeta existente', () => {
     })
 
     it('otro usuario no puede cambiar ni quitar la imagen de mi tarjeta', async () => {
-        const leccion = await crearLeccion()
-        const { body: tarjeta } = await crearTarjetaConImagen(leccion._id, PNG)
+        const tema = await crearTema()
+        const { body: tarjeta } = await crearTarjetaConImagen(tema._id, PNG)
         const otroToken = await registrarYLoguear({ nombre: 'otro', email: 'otro@example.com', password: 'clave-segura' })
 
         await ponerImagen(tarjeta._id, JPEG, 'otra.jpg', otroToken).expect(404)
         await api().delete(`/api/imagenes/tarjeta/${tarjeta._id}`).set(auth(otroToken)).expect(404)
 
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         expect(l.cajas[0].tarjetas[0].imagen).toBe(tarjeta.imagen)
         expect(await Imagen.countDocuments()).toBe(1)
     })
 
     it('quita la imagen de la tarjeta y la borra', async () => {
-        const leccion = await crearLeccion()
-        const { body: tarjeta } = await crearTarjetaConImagen(leccion._id, PNG)
+        const tema = await crearTema()
+        const { body: tarjeta } = await crearTarjetaConImagen(tema._id, PNG)
 
         const res = await api().delete(`/api/imagenes/tarjeta/${tarjeta._id}`).set(auth(token))
         expect(res.status).toBe(200)
         expect(res.body.imagen).toBeNull()
 
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         expect(l.cajas[0].tarjetas[0].imagen).toBeNull()
         expect(await Imagen.countDocuments()).toBe(0)
     })
@@ -333,32 +354,32 @@ describe('imagen de una tarjeta existente', () => {
 
     it('funciona con tarjetas que ya no están en la caja 1', async () => {
         const tarjeta = await tarjetaSinImagen()
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         l.cajas[0].tarjetas[0].es_correcta = true
-        await api().put('/api/lecciones/leccion').set(auth(token)).send(l).expect(200)
+        await guardarSesion(l).expect(200)
 
         const res = await ponerImagen(tarjeta._id, PNG)
         expect(res.status).toBe(200)
-        const [despues] = await leccionesActuales()
+        const [despues] = await temasActuales()
         expect(despues.cajas[1].tarjetas[0].imagen).toBe(res.body.imagen)
     })
 })
 
-describe('PATCH /api/lecciones/leccion/:tarjetaId (editar tarjeta)', () => {
+describe('PATCH /api/tarjetas/:tarjetaId (editar tarjeta)', () => {
 
     const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(32)])
-    const editar = (tarjetaId: string, t = token) => api().patch(`/api/lecciones/leccion/${tarjetaId}`).set(auth(t))
+    const editar = (tarjetaId: string, t = token) => api().patch(`/api/tarjetas/${tarjetaId}`).set(auth(t))
 
-    async function tarjeta(conImagen = false, nombreLeccion = 'Inglés') {
-        const leccion = await crearLeccion(nombreLeccion)
+    async function tarjeta(conImagen = false, nombreAsignatura = 'Inglés') {
+        const tema = await crearTema(nombreAsignatura)
         const res = conImagen
-            ? await crearTarjetaConImagen(leccion._id, PNG)
-            : await api().post(`/api/lecciones/leccion/${leccion._id}`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
+            ? await crearTarjetaConImagen(tema._id, PNG)
+            : await api().post(`/api/temas/${tema._id}/tarjetas`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
         return res.body
     }
 
     it('exige token', async () => {
-        await api().patch(`/api/lecciones/leccion/${new Types.ObjectId()}`).send({ pregunta: 'a', respuesta: 'b' }).expect(401)
+        await api().patch(`/api/tarjetas/${new Types.ObjectId()}`).send({ pregunta: 'a', respuesta: 'b' }).expect(401)
     })
 
     it('cambia el texto (JSON) y conserva imagen, nivel y fechas', async () => {
@@ -374,7 +395,7 @@ describe('PATCH /api/lecciones/leccion/:tarjetaId (editar tarjeta)', () => {
             nivel: t.nivel,
             proxima_revision: t.proxima_revision,
         })
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         expect(l.cajas[0].tarjetas[0].pregunta).toBe('**cat**')
         await api().get(`/api/imagenes/${t.imagen}`).set(auth(token)).expect(200)
     })
@@ -397,8 +418,8 @@ describe('PATCH /api/lecciones/leccion/:tarjetaId (editar tarjeta)', () => {
         const res = await editar(t._id).field('pregunta', 'uno\r\ndos').field('respuesta', '- a\r\n- b').attach('imagen', PNG, 'f.png')
         expect(res.body).toMatchObject({ pregunta: 'uno\ndos', respuesta: '- a\n- b' })
 
-        const leccion = await crearLeccion('Francés')
-        const creada = await api().post(`/api/lecciones/leccion/${leccion._id}`).set(auth(token))
+        const tema = await crearTema('Francés')
+        const creada = await api().post(`/api/temas/${tema._id}/tarjetas`).set(auth(token))
             .field('pregunta', 'x\r\ny').field('respuesta', 'z').attach('imagen', PNG, 'f.png')
         expect(creada.body.pregunta).toBe('x\ny')
     })
@@ -426,7 +447,7 @@ describe('PATCH /api/lecciones/leccion/:tarjetaId (editar tarjeta)', () => {
         const t = await tarjeta(true)
         const res = await editar(t._id).field('pregunta', '   ').field('respuesta', 'gato').attach('imagen', JPEG, 'otra.jpg')
         expect(res.status).toBe(400)
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         expect(l.cajas[0].tarjetas[0]).toMatchObject({ pregunta: '¿Qué animal es?', imagen: t.imagen })
         expect(await Imagen.countDocuments()).toBe(1)
     })
@@ -435,7 +456,7 @@ describe('PATCH /api/lecciones/leccion/:tarjetaId (editar tarjeta)', () => {
         const t = await tarjeta(true)
         const res = await editar(t._id).field('pregunta', 'cat').field('respuesta', 'gato').attach('imagen', Buffer.from('no soy imagen'), 'x.png')
         expect(res.status).toBe(415)
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         expect(l.cajas[0].tarjetas[0]).toMatchObject({ pregunta: '¿Qué animal es?', imagen: t.imagen })
     })
 
@@ -449,18 +470,18 @@ describe('PATCH /api/lecciones/leccion/:tarjetaId (editar tarjeta)', () => {
         const t = await tarjeta()
         const otro = await registrarYLoguear({ nombre: 'otro', email: 'otro@example.com', password: 'clave-segura' })
         await editar(t._id, otro).send({ pregunta: 'hack', respuesta: 'hack' }).expect(404)
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         expect(l.cajas[0].tarjetas[0].pregunta).toBe('dog')
     })
 
     it('edita tarjetas que ya no están en la caja 1, sin moverlas', async () => {
         const t = await tarjeta()
-        const [l] = await leccionesActuales()
+        const [l] = await temasActuales()
         l.cajas[0].tarjetas[0].es_correcta = true
-        await api().put('/api/lecciones/leccion').set(auth(token)).send(l).expect(200)
+        await guardarSesion(l).expect(200)
 
         await editar(t._id).send({ pregunta: 'cat', respuesta: 'gato' }).expect(200)
-        const [despues] = await leccionesActuales()
+        const [despues] = await temasActuales()
         expect(despues.cajas[0].tarjetas).toHaveLength(0)
         expect(despues.cajas[1].tarjetas[0]).toMatchObject({ pregunta: 'cat', nivel: 2 })
     })

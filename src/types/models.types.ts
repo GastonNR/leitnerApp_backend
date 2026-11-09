@@ -18,11 +18,18 @@ export interface ICaja{
     nombre: string
     tarjetas: ITarjeta[]
 }
-export interface ILeccion{
+export interface ITema{
     _id?: Types.ObjectId
     fechaCreacion: Date
     nombre: string
     cajas: ICaja[]
+}
+
+export interface IAsignatura{
+    _id?: Types.ObjectId
+    fechaCreacion: Date
+    nombre: string
+    temas: ITema[]
 }
 
 export interface IUsuarios{
@@ -30,7 +37,7 @@ export interface IUsuarios{
     nombre: string
     email: string
     password: string
-    lecciones: ILeccion[]
+    asignaturas: IAsignatura[]
 }
 
 export interface IImagen{
@@ -43,7 +50,12 @@ export interface IImagen{
 }
 
 // SUBDOCUMENTOS MONGOOSE
-export type LeccionSubdocument = Types.Subdocument<Types.ObjectId> & {
+export type AsignaturaSubdocument = Types.Subdocument<Types.ObjectId> & {
+    nombre: string
+    fechaCreacion: Date
+    temas: Types.DocumentArray<TemaSubdocument>
+}
+export type TemaSubdocument = Types.Subdocument<Types.ObjectId> & {
     nombre: string
     fechaCreacion: Date
     cajas: Types.DocumentArray<CajasSubdocument>
@@ -55,9 +67,6 @@ export type CajasSubdocument = Types.Subdocument<Types.ObjectId> & {
 export type TarjetaSubdocument = Types.Subdocument<Types.ObjectId> & ITarjeta
 
 // DOCUMENTOS HIDRATADOS
-export type UsuarioDocument = HydratedDocument<Omit<IUsuarios, 'lecciones'>> & {
-    lecciones: Types.DocumentArray<LeccionSubdocument>
-}
-export type LeccionDocument = HydratedDocument<Omit<ILeccion, 'cajas'>> & {
-    cajas: Types.DocumentArray<CajasSubdocument>
+export type UsuarioDocument = HydratedDocument<Omit<IUsuarios, 'asignaturas'>> & {
+    asignaturas: Types.DocumentArray<AsignaturaSubdocument>
 }

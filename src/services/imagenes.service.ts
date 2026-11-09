@@ -42,7 +42,7 @@ export const obtenerImagenService = async (usuarioId: string, imagenId: string):
     return { datos: imagen.datos, tipo: imagen.tipo }
 }
 
-// Borra imágenes del usuario (al eliminar tarjetas o lecciones). Ignora ids vacíos.
+// Borra imágenes del usuario (al eliminar tarjetas, temas o asignaturas). Ignora ids vacíos.
 export const eliminarImagenesService = async (usuarioId: string, ids: Array<Types.ObjectId | string | null | undefined>): Promise<void> => {
 
     const validos = ids.filter((id): id is Types.ObjectId | string => !!id && isValidObjectId(id))
@@ -55,12 +55,14 @@ export const eliminarImagenesService = async (usuarioId: string, ids: Array<Type
 // IMAGEN DE UNA TARJETA EXISTENTE (cambiar / quitar)
 // ==========================================
 
-// Busca la tarjeta en cualquier lección y caja del usuario.
+// Busca la tarjeta en cualquier asignatura, tema y caja del usuario.
 function buscarTarjeta(usuario: UsuarioDocument, tarjetaId: string): TarjetaSubdocument | null {
-    for (const leccion of usuario.lecciones) {
-        for (const caja of leccion.cajas) {
-            const tarjeta = caja.tarjetas.id(tarjetaId)
-            if (tarjeta) return tarjeta
+    for (const asignatura of usuario.asignaturas) {
+        for (const tema of asignatura.temas) {
+            for (const caja of tema.cajas) {
+                const tarjeta = caja.tarjetas.id(tarjetaId)
+                if (tarjeta) return tarjeta
+            }
         }
     }
     return null

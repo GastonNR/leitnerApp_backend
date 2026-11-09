@@ -13,7 +13,7 @@ const imagenes_routes = Router()
 imagenes_routes.get('/:id', verificarToken, obtenerImagen)
 
 // Imagen de una tarjeta existente. Crear una tarjeta con imagen se hace en
-// POST /api/lecciones/leccion/:leccion_id.
+// POST /api/temas/:temaId/tarjetas.
 imagenes_routes.put('/tarjeta/:tarjetaId', verificarToken, subirImagen, reemplazarImagenTarjeta)
 imagenes_routes.delete('/tarjeta/:tarjetaId', verificarToken, eliminarImagenTarjeta)
 
