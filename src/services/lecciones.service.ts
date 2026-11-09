@@ -2,7 +2,7 @@ import Usuario from "../models/Usuarios.js"
 import { AppError } from "../types/AppError.js"
 import { TarjetaDTO } from "../types/lecciones.types.js"
 import { ICaja, ILeccion, ITarjeta, UsuarioDocument } from "../types/models.types.js"
-import { eliminarImagenesService, guardarImagenService } from "./imagenes.service.js"
+import { cargarTarjeta, eliminarImagenesService, guardarImagenService } from "./imagenes.service.js"
 import { Types } from "mongoose"
 
 // ==========================
@@ -42,6 +42,12 @@ function nivelValido(nivel: unknown): number {
     const n = Number(nivel)
     if (!Number.isInteger(n)) return NIVEL_MIN
     return Math.min(Math.max(n, NIVEL_MIN), NIVEL_MAX)
+}
+
+// Texto de pregunta/respuesta: sin espacios en los bordes y con saltos de línea
+// "\n" (los formularios multipart del navegador los envían como "\r\n").
+function limpiarTexto(texto: unknown): string {
+    return typeof texto === 'string' ? texto.replace(/\r\n?/g, '\n').trim() : ''
 }
 
 export function crearNuevaTarjeta(pregunta: string, respuesta: string, imagen: Types.ObjectId | null = null): ITarjeta {
@@ -159,8 +165,8 @@ export const deleteLeccionService = async (usuario_id: string, leccion_id: strin
 
 export const createCardService = async (usuarioId: string, leccionId: string, tarjetaDatos: TarjetaDTO, imagen?: Buffer): Promise<ITarjeta> => {
 
-    const pregunta = tarjetaDatos.pregunta?.trim()
-    const respuesta = tarjetaDatos.respuesta?.trim()
+    const pregunta = limpiarTexto(tarjetaDatos.pregunta)
+    const respuesta = limpiarTexto(tarjetaDatos.respuesta)
     if (!pregunta || !respuesta) throw new AppError("La pregunta y la respuesta son obligatorias.", 400)
 
     const usuario = await buscarUsuario(usuarioId)
@@ -183,6 +189,40 @@ export const createCardService = async (usuarioId: string, leccionId: string, ta
     const tarjetas = leccion.cajas[0].tarjetas
     return tarjetas[tarjetas.length - 1]
 
+}
+
+export interface EdicionTarjeta extends TarjetaDTO {
+    quitarImagen?: boolean
+}
+
+// Cambia el texto de una tarjeta y, opcionalmente, su imagen (nueva o quitarla).
+// No toca el progreso: la tarjeta sigue en su caja, con su nivel y sus fechas.
+// Mismo orden seguro que al reemplazar una imagen: primero la imagen nueva,
+// luego la tarjeta y recién al final se borra la anterior.
+export const updateCardService = async (usuarioId: string, tarjetaId: string, datos: EdicionTarjeta, imagen?: Buffer): Promise<ITarjeta> => {
+
+    const pregunta = limpiarTexto(datos.pregunta)
+    const respuesta = limpiarTexto(datos.respuesta)
+    if (!pregunta || !respuesta) throw new AppError("La pregunta y la respuesta son obligatorias.", 400)
+
+    const { usuario, tarjeta } = await cargarTarjeta(usuarioId, tarjetaId)
+    const anterior = tarjeta.imagen ?? null
+    const cambiaImagen = !!imagen || !!datos.quitarImagen
+
+    const nueva = imagen ? await guardarImagenService(usuarioId, imagen) : null
+
+    try {
+        tarjeta.pregunta = pregunta
+        tarjeta.respuesta = respuesta
+        if (cambiaImagen) tarjeta.imagen = nueva
+        await usuario.save()
+    } catch (error) {
+        await eliminarImagenesService(usuarioId, [nueva])
+        throw error
+    }
+
+    if (cambiaImagen) await eliminarImagenesService(usuarioId, [anterior])
+    return tarjeta.toObject()
 }
 
 export const updateBoxesService = async (usuarioId: string, datosTarjetas: Pick<ILeccion, '_id' | 'cajas'>) => {

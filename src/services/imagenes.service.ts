@@ -66,7 +66,7 @@ function buscarTarjeta(usuario: UsuarioDocument, tarjetaId: string): TarjetaSubd
     return null
 }
 
-async function cargarTarjeta(usuarioId: string, tarjetaId: string) {
+export async function cargarTarjeta(usuarioId: string, tarjetaId: string) {
     const usuario: UsuarioDocument | null = await Usuario.findById(usuarioId)
     if (!usuario) throw new AppError("Usuario no encontrado", 404)
 

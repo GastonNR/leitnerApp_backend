@@ -6,7 +6,8 @@ import {
     deleteLeccionService,
     getUserLectionsService,
     updateBoxesService,
-    deleteCardService
+    deleteCardService,
+    updateCardService
 } from "../services/lecciones.service.js"
 import { ILeccion } from "../types/models.types.js"
 import type {
@@ -15,7 +16,9 @@ import type {
     CrearTarjetaBody,
     CrearTarjetaParams,
     EliminarLeccionParams,
-    EliminarTarjetaParams
+    EliminarTarjetaParams,
+    EditarTarjetaBody,
+    EditarTarjetaParams
 } from "../types/lecciones.types.js"
 import { responderError } from "../utils/responderError.js"
 
@@ -146,6 +149,29 @@ const eliminarTarjeta = async (req: Request<EliminarTarjetaParams>, res: Respons
 
 }
 
+const editarTarjeta = async (req: Request<EditarTarjetaParams, {}, EditarTarjetaBody>, res: Response): Promise<Response> => {
+
+    if (!req.usuario) return res.status(401).json({ ok: false, message: "No autorizado" })
+
+    const { tarjetaId } = req.params
+    if (!isValidObjectId(tarjetaId)) return idInvalido(res, 'tarjeta')
+
+    const { pregunta, respuesta, quitarImagen } = req.body ?? {}
+
+    try {
+        const tarjeta = await updateCardService(
+            req.usuario.id,
+            tarjetaId,
+            { pregunta, respuesta, quitarImagen: quitarImagen === true || quitarImagen === 'true' },
+            req.file?.buffer
+        )
+        return res.json(tarjeta)
+
+    } catch (error) {
+        return responderError(res, error, "Error al editar la tarjeta")
+    }
+}
+
 export {
     cargarLecciones,
     crearLeccion,
@@ -153,4 +179,5 @@ export {
     eliminarLeccion,
     crearTarjeta,
     eliminarTarjeta,
+    editarTarjeta,
 }

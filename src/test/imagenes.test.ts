@@ -343,3 +343,125 @@ describe('imagen de una tarjeta existente', () => {
         expect(despues.cajas[1].tarjetas[0].imagen).toBe(res.body.imagen)
     })
 })
+
+describe('PATCH /api/lecciones/leccion/:tarjetaId (editar tarjeta)', () => {
+
+    const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(32)])
+    const editar = (tarjetaId: string, t = token) => api().patch(`/api/lecciones/leccion/${tarjetaId}`).set(auth(t))
+
+    async function tarjeta(conImagen = false, nombreLeccion = 'Inglés') {
+        const leccion = await crearLeccion(nombreLeccion)
+        const res = conImagen
+            ? await crearTarjetaConImagen(leccion._id, PNG)
+            : await api().post(`/api/lecciones/leccion/${leccion._id}`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
+        return res.body
+    }
+
+    it('exige token', async () => {
+        await api().patch(`/api/lecciones/leccion/${new Types.ObjectId()}`).send({ pregunta: 'a', respuesta: 'b' }).expect(401)
+    })
+
+    it('cambia el texto (JSON) y conserva imagen, nivel y fechas', async () => {
+        const t = await tarjeta(true)
+        const res = await editar(t._id).send({ pregunta: '  **cat**  ', respuesta: 'gato' })
+
+        expect(res.status).toBe(200)
+        expect(res.body).toMatchObject({
+            _id: t._id,
+            pregunta: '**cat**',
+            respuesta: 'gato',
+            imagen: t.imagen,
+            nivel: t.nivel,
+            proxima_revision: t.proxima_revision,
+        })
+        const [l] = await leccionesActuales()
+        expect(l.cajas[0].tarjetas[0].pregunta).toBe('**cat**')
+        await api().get(`/api/imagenes/${t.imagen}`).set(auth(token)).expect(200)
+    })
+
+    it('cambia texto e imagen juntos (multipart) y borra la imagen anterior', async () => {
+        const t = await tarjeta(true)
+        const res = await editar(t._id).field('pregunta', 'cat').field('respuesta', 'gato').attach('imagen', JPEG, 'otra.jpg')
+
+        expect(res.status).toBe(200)
+        expect(res.body.pregunta).toBe('cat')
+        expect(res.body.imagen).not.toBe(t.imagen)
+        await api().get(`/api/imagenes/${t.imagen}`).set(auth(token)).expect(404)
+        const nueva = await api().get(`/api/imagenes/${res.body.imagen}`).set(auth(token)).expect(200)
+        expect(nueva.headers['content-type']).toBe('image/jpeg')
+        expect(await Imagen.countDocuments()).toBe(1)
+    })
+
+    it('guarda los saltos de línea como \\n aunque multipart los envíe como \\r\\n', async () => {
+        const t = await tarjeta()
+        const res = await editar(t._id).field('pregunta', 'uno\r\ndos').field('respuesta', '- a\r\n- b').attach('imagen', PNG, 'f.png')
+        expect(res.body).toMatchObject({ pregunta: 'uno\ndos', respuesta: '- a\n- b' })
+
+        const leccion = await crearLeccion('Francés')
+        const creada = await api().post(`/api/lecciones/leccion/${leccion._id}`).set(auth(token))
+            .field('pregunta', 'x\r\ny').field('respuesta', 'z').attach('imagen', PNG, 'f.png')
+        expect(creada.body.pregunta).toBe('x\ny')
+    })
+
+    it('agrega una imagen a una tarjeta que no tenía', async () => {
+        const t = await tarjeta()
+        const res = await editar(t._id).field('pregunta', 'dog').field('respuesta', 'perro').attach('imagen', PNG, 'foto.png')
+        expect(res.status).toBe(200)
+        expect(Types.ObjectId.isValid(res.body.imagen)).toBe(true)
+    })
+
+    it('quitarImagen=true (multipart o JSON) quita y borra la imagen', async () => {
+        const t1 = await tarjeta(true)
+        const r1 = await editar(t1._id).field('pregunta', 'a').field('respuesta', 'b').field('quitarImagen', 'true')
+        expect(r1.status).toBe(200)
+        expect(r1.body.imagen).toBeNull()
+
+        const t2 = await tarjeta(true, 'Francés')
+        const r2 = await editar(t2._id).send({ pregunta: 'a', respuesta: 'b', quitarImagen: true })
+        expect(r2.body.imagen).toBeNull()
+        expect(await Imagen.countDocuments()).toBe(0)
+    })
+
+    it('rechaza texto vacío sin tocar la tarjeta ni guardar la imagen', async () => {
+        const t = await tarjeta(true)
+        const res = await editar(t._id).field('pregunta', '   ').field('respuesta', 'gato').attach('imagen', JPEG, 'otra.jpg')
+        expect(res.status).toBe(400)
+        const [l] = await leccionesActuales()
+        expect(l.cajas[0].tarjetas[0]).toMatchObject({ pregunta: '¿Qué animal es?', imagen: t.imagen })
+        expect(await Imagen.countDocuments()).toBe(1)
+    })
+
+    it('si la imagen nueva no es válida, no cambia nada', async () => {
+        const t = await tarjeta(true)
+        const res = await editar(t._id).field('pregunta', 'cat').field('respuesta', 'gato').attach('imagen', Buffer.from('no soy imagen'), 'x.png')
+        expect(res.status).toBe(415)
+        const [l] = await leccionesActuales()
+        expect(l.cajas[0].tarjetas[0]).toMatchObject({ pregunta: '¿Qué animal es?', imagen: t.imagen })
+    })
+
+    it('responde 400 con id mal formado y 404 si la tarjeta no existe (sin guardar la imagen)', async () => {
+        await editar('no-es-id').send({ pregunta: 'a', respuesta: 'b' }).expect(400)
+        await editar(String(new Types.ObjectId())).field('pregunta', 'a').field('respuesta', 'b').attach('imagen', PNG, 'f.png').expect(404)
+        expect(await Imagen.countDocuments()).toBe(0)
+    })
+
+    it('otro usuario no puede editar mi tarjeta', async () => {
+        const t = await tarjeta()
+        const otro = await registrarYLoguear({ nombre: 'otro', email: 'otro@example.com', password: 'clave-segura' })
+        await editar(t._id, otro).send({ pregunta: 'hack', respuesta: 'hack' }).expect(404)
+        const [l] = await leccionesActuales()
+        expect(l.cajas[0].tarjetas[0].pregunta).toBe('dog')
+    })
+
+    it('edita tarjetas que ya no están en la caja 1, sin moverlas', async () => {
+        const t = await tarjeta()
+        const [l] = await leccionesActuales()
+        l.cajas[0].tarjetas[0].es_correcta = true
+        await api().put('/api/lecciones/leccion').set(auth(token)).send(l).expect(200)
+
+        await editar(t._id).send({ pregunta: 'cat', respuesta: 'gato' }).expect(200)
+        const [despues] = await leccionesActuales()
+        expect(despues.cajas[0].tarjetas).toHaveLength(0)
+        expect(despues.cajas[1].tarjetas[0]).toMatchObject({ pregunta: 'cat', nivel: 2 })
+    })
+})

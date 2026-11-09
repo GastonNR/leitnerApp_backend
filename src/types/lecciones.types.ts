@@ -21,6 +21,10 @@ export interface EliminarTarjetaParams{
     tarjetaId: string
 }
 
+export interface EditarTarjetaParams{
+    tarjetaId: string
+}
+
 //BODIES
 export interface CrearLeccionBody{
     nuevaLeccion: string
@@ -36,6 +40,12 @@ export interface ActualizarCajasDeLeccionBody{
 export interface CrearTarjetaBody{
     pregunta: string
     respuesta: string
+}
+// En multipart los campos llegan como texto: quitarImagen = "true"
+export interface EditarTarjetaBody{
+    pregunta: string
+    respuesta: string
+    quitarImagen?: boolean | string
 }
 
 //DTO
