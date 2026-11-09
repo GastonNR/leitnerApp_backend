@@ -28,7 +28,7 @@ beforeEach(async () => {
     token = await registrarYLoguear()
 })
 
-const otroUsuario = () => registrarYLoguear({ nombre: 'otro', email: 'otro@example.com', password: 'clave' })
+const otroUsuario = () => registrarYLoguear({ nombre: 'otro', email: 'otro@example.com', password: 'clave-del-otro' })
 
 async function crearAsignatura(nombre = 'Inglés') {
     const res = await api().post('/api/asignaturas').set(auth(token)).send({ nombre })
@@ -477,6 +477,9 @@ describe('tarjetas', () => {
     })
 })
 
+const guardarSesion = (temaId: string, respuestas: unknown, t = token) =>
+    api().put(`/api/temas/${temaId}/cajas`).set(auth(t)).send({ respuestas })
+
 describe('PUT /api/temas/:temaId/cajas (guardar sesión de estudio)', () => {
 
     it('aplica el algoritmo Leitner y persiste el resultado', async () => {
@@ -485,14 +488,11 @@ describe('PUT /api/temas/:temaId/cajas (guardar sesión de estudio)', () => {
         const fallada = await crearTarjeta(tema._id, 'fallo', 'f')
         const sinEvaluar = await crearTarjeta(tema._id, 'pendiente', 'p')
 
-        // Sesión hecha en el cliente: marca dos tarjetas y deja una sin evaluar.
-        const actual = await temaActual()
-        actual.cajas[0].tarjetas = actual.cajas[0].tarjetas.map((t: { _id: string }) => ({
-            ...t,
-            es_correcta: t._id === acertada._id ? true : t._id === fallada._id ? false : null,
-        }))
-
-        const res = await api().put(`/api/temas/${tema._id}/cajas`).set(auth(token)).send({ cajas: actual.cajas })
+        // Sesión hecha en el cliente: responde dos tarjetas y deja una sin evaluar.
+        const res = await guardarSesion(tema._id, [
+            { _id: acertada._id, es_correcta: true },
+            { _id: fallada._id, es_correcta: false },
+        ])
 
         expect(res.status).toBe(200)
         expect(res.body._id).toBe(tema._id)
@@ -513,19 +513,20 @@ describe('PUT /api/temas/:temaId/cajas (guardar sesión de estudio)', () => {
         expect(t.nivel).toBe(1)
         expect(t.es_correcta).toBeNull()
         expect(fechaLocal(t.proxima_revision)).toBe(enDias(1))
+
+        const pendiente = guardado.cajas[0].tarjetas.find((x: { _id: string }) => x._id === sinEvaluar._id)
+        expect(pendiente).toEqual(sinEvaluar)
     })
 
     it('solo cambia el tema estudiado', async () => {
         const asignatura = await crearAsignatura()
         const estudiado = await crearTema(asignatura._id, 'A')
         const otro = await crearTema(asignatura._id, 'B')
-        await crearTarjeta(estudiado._id)
+        const tarjeta = await crearTarjeta(estudiado._id)
         await crearTarjeta(otro._id)
 
         const [antes] = await asignaturasActuales()
-        const cajas = antes.temas[0].cajas
-        cajas[0].tarjetas[0].es_correcta = true
-        await api().put(`/api/temas/${estudiado._id}/cajas`).set(auth(token)).send({ cajas }).expect(200)
+        await guardarSesion(estudiado._id, [{ _id: tarjeta._id, es_correcta: true }]).expect(200)
 
         const [despues] = await asignaturasActuales()
         expect(despues.temas[0].cajas[1].tarjetas).toHaveLength(1)
@@ -535,38 +536,69 @@ describe('PUT /api/temas/:temaId/cajas (guardar sesión de estudio)', () => {
     it('conserva los _id de las tarjetas tras guardar (se pueden seguir borrando)', async () => {
         const tema = await crearTemaNuevo()
         const tarjeta = await crearTarjeta(tema._id)
-        const actual = await temaActual()
-        actual.cajas[0].tarjetas[0].es_correcta = true
 
-        await api().put(`/api/temas/${tema._id}/cajas`).set(auth(token)).send({ cajas: actual.cajas }).expect(200)
+        await guardarSesion(tema._id, [{ _id: tarjeta._id, es_correcta: true }]).expect(200)
         await api().delete(`/api/tarjetas/${tarjeta._id}`).set(auth(token)).expect(204)
 
         const guardado = await temaActual()
         expect(guardado.cajas.flatMap((c: { tarjetas: unknown[] }) => c.tarjetas)).toHaveLength(0)
     })
 
-    it('responde 400 si no llegan exactamente 5 cajas', async () => {
+    it('el cliente no puede agregar, quitar ni cambiar tarjetas al guardar', async () => {
+        const tema = await crearTemaNuevo()
+        const tarjeta = await crearTarjeta(tema._id, 'dog', 'perro')
+
+        // Datos de más (texto, nivel, fecha) y una tarjeta que no existe: se ignoran.
+        await guardarSesion(tema._id, [
+            { _id: tarjeta._id, es_correcta: true, pregunta: 'cambiada', nivel: 5, proxima_revision: '2099-01-01' },
+            { _id: idInexistente(), es_correcta: true },
+        ]).expect(200)
+
+        const guardado = await temaActual()
+        const todas = guardado.cajas.flatMap((c: { tarjetas: unknown[] }) => c.tarjetas)
+        expect(todas).toHaveLength(1)
+        expect(guardado.cajas[1].tarjetas[0]).toMatchObject({ _id: tarjeta._id, pregunta: 'dog', respuesta: 'perro', nivel: 2 })
+        expect(fechaLocal(guardado.cajas[1].tarjetas[0].proxima_revision)).toBe(enDias(3))
+    })
+
+    it('ignora las respuestas a tarjetas de otro tema', async () => {
+        const asignatura = await crearAsignatura()
+        const a = await crearTema(asignatura._id, 'A')
+        const b = await crearTema(asignatura._id, 'B')
+        const deB = await crearTarjeta(b._id)
+
+        await guardarSesion(a._id, [{ _id: deB._id, es_correcta: true }]).expect(200)
+
+        const [guardada] = await asignaturasActuales()
+        expect(guardada.temas[1].cajas[0].tarjetas.map((t: { _id: string }) => t._id)).toEqual([deB._id])
+    })
+
+    it.each([
+        ['sin lista', undefined],
+        ['una lista de cajas', { cajas: [] }],
+        ['un id mal formado', [{ _id: 'xyz', es_correcta: true }]],
+        ['es_correcta que no es booleano', [{ _id: new Types.ObjectId().toString(), es_correcta: 'true' }]],
+        ['un elemento nulo', [null]],
+    ])('responde 400 con %s', async (_, respuestas) => {
         const tema = await crearTemaNuevo()
 
-        const res = await api().put(`/api/temas/${tema._id}/cajas`).set(auth(token)).send({ cajas: tema.cajas.slice(0, 4) })
+        const res = await guardarSesion(tema._id, respuestas)
 
         expect(res.status).toBe(400)
-        expect(res.body.message).toBe('Se esperan exactamente 5 cajas')
+        expect(res.body.ok).toBe(false)
     })
 
     it('responde 400 con un id mal formado y 404 con un tema inexistente', async () => {
-        const tema = await crearTemaNuevo()
-
-        await api().put('/api/temas/xyz/cajas').set(auth(token)).send({ cajas: tema.cajas }).expect(400)
-        await api().put(`/api/temas/${idInexistente()}/cajas`).set(auth(token)).send({ cajas: tema.cajas }).expect(404)
+        await guardarSesion('xyz', []).expect(400)
+        await guardarSesion(idInexistente(), []).expect(404)
     })
 
-    it('un usuario no puede sobrescribir el tema de otro', async () => {
+    it('un usuario no puede guardar una sesión en el tema de otro', async () => {
         const tema = await crearTemaNuevo()
-        await crearTarjeta(tema._id)
+        const tarjeta = await crearTarjeta(tema._id)
         const tokenOtro = await otroUsuario()
 
-        await api().put(`/api/temas/${tema._id}/cajas`).set(auth(tokenOtro)).send({ cajas: tema.cajas }).expect(404)
+        await guardarSesion(tema._id, [{ _id: tarjeta._id, es_correcta: true }], tokenOtro).expect(404)
 
         const guardado = await temaActual()
         expect(guardado.cajas[0].tarjetas).toHaveLength(1)

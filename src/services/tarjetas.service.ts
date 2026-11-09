@@ -1,4 +1,5 @@
 import Usuario from "../models/Usuarios.js"
+import { TARJETAS_POR_USUARIO_MAX, TEXTO_TARJETA_MAX } from "../config/limites.js"
 import { AppError } from "../types/AppError.js"
 import { TarjetaDTO } from "../types/estudio.types.js"
 import { ITarjeta } from "../types/models.types.js"
@@ -12,15 +13,30 @@ function limpiarTexto(texto: unknown): string {
     return typeof texto === 'string' ? texto.replace(/\r\n?/g, '\n').trim() : ''
 }
 
+// Pregunta y respuesta limpias, o un 400 si falta alguna o es demasiado larga.
+function leerTextos(datos: TarjetaDTO): { pregunta: string, respuesta: string } {
+    const pregunta = limpiarTexto(datos.pregunta)
+    const respuesta = limpiarTexto(datos.respuesta)
+    if (!pregunta || !respuesta) throw new AppError("La pregunta y la respuesta son obligatorias.", 400)
+    if (pregunta.length > TEXTO_TARJETA_MAX || respuesta.length > TEXTO_TARJETA_MAX) {
+        throw new AppError(`La pregunta y la respuesta no pueden superar los ${TEXTO_TARJETA_MAX} caracteres.`, 400)
+    }
+    return { pregunta, respuesta }
+}
+
 // Agrega una tarjeta a la caja 1 de un tema, con imagen opcional.
 export const createCardService = async (usuarioId: string, temaId: string, tarjetaDatos: TarjetaDTO, imagen?: Buffer): Promise<ITarjeta> => {
 
-    const pregunta = limpiarTexto(tarjetaDatos.pregunta)
-    const respuesta = limpiarTexto(tarjetaDatos.respuesta)
-    if (!pregunta || !respuesta) throw new AppError("La pregunta y la respuesta son obligatorias.", 400)
+    const { pregunta, respuesta } = leerTextos(tarjetaDatos)
 
     const usuario = await buscarUsuario(usuarioId)
     const { tema } = buscarTema(usuario, temaId)
+
+    const total = usuario.asignaturas.reduce((n, a) =>
+        n + a.temas.reduce((m, t) => m + t.cajas.reduce((k, c) => k + c.tarjetas.length, 0), 0), 0)
+    if (total >= TARJETAS_POR_USUARIO_MAX) {
+        throw new AppError(`Llegaste al máximo de ${TARJETAS_POR_USUARIO_MAX} tarjetas.`, 400)
+    }
 
     // La imagen se guarda primero; si la tarjeta no llega a guardarse, se borra
     // para no dejar imágenes huérfanas.
@@ -48,9 +64,7 @@ export interface EdicionTarjeta extends TarjetaDTO {
 // se borra la anterior.
 export const updateCardService = async (usuarioId: string, tarjetaId: string, datos: EdicionTarjeta, imagen?: Buffer): Promise<ITarjeta> => {
 
-    const pregunta = limpiarTexto(datos.pregunta)
-    const respuesta = limpiarTexto(datos.respuesta)
-    if (!pregunta || !respuesta) throw new AppError("La pregunta y la respuesta son obligatorias.", 400)
+    const { pregunta, respuesta } = leerTextos(datos)
 
     const { usuario, tarjeta } = await cargarTarjeta(usuarioId, tarjetaId)
     const anterior = tarjeta.imagen ?? null

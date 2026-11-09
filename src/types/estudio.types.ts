@@ -1,5 +1,3 @@
-import { ICaja } from "./models.types.js"
-
 // PARAMS
 export interface AsignaturaParams{
     asignaturaId: string
@@ -24,9 +22,9 @@ export interface MoverTemaBody{
     asignaturaId: string
 }
 
-// Guardar una sesión de estudio de un tema
+// Guardar una sesión de estudio de un tema: solo las tarjetas respondidas
 export interface GuardarSesionBody{
-    cajas: Array<ICaja>
+    respuestas: Array<{ _id: string, es_correcta: boolean }>
 }
 
 export interface CrearTarjetaBody{

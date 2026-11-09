@@ -1,10 +1,15 @@
-import { Types } from "mongoose"
+import { isValidObjectId } from "mongoose"
+import { ASIGNATURAS_MAX, NOMBRE_MAX, TEMAS_POR_ASIGNATURA_MAX } from "../config/limites.js"
 import { AppError } from "../types/AppError.js"
-import { IAsignatura, ICaja, ITema } from "../types/models.types.js"
+import { IAsignatura, ITema } from "../types/models.types.js"
 import { buscarAsignatura, buscarTema, buscarUsuario, mismoNombre } from "./buscar.js"
 import { eliminarImagenesService } from "./imagenes.service.js"
 import { crearCajasVacias, imagenesDeTema, ordenarTarjetasEnCajas } from "./leitner.js"
-import { contarRespuestas, eliminarRepasosDeTemas, registrarRepaso } from "./repasos.service.js"
+import { eliminarRepasosDeTemas, registrarRepaso } from "./repasos.service.js"
+
+function validarNombre(nombre: string): void {
+    if (nombre.trim().length > NOMBRE_MAX) throw new AppError(`El nombre no puede superar los ${NOMBRE_MAX} caracteres`, 400)
+}
 
 // ==========================================
 // ASIGNATURAS
@@ -17,8 +22,12 @@ export const getAsignaturasService = async (usuarioId: string): Promise<IAsignat
 
 export const createAsignaturaService = async (usuarioId: string, nombre: string): Promise<IAsignatura> => {
 
+    validarNombre(nombre)
     const usuario = await buscarUsuario(usuarioId)
 
+    if (usuario.asignaturas.length >= ASIGNATURAS_MAX) {
+        throw new AppError(`No se pueden tener más de ${ASIGNATURAS_MAX} asignaturas`, 400)
+    }
     if (usuario.asignaturas.some(a => mismoNombre(a.nombre, nombre))) {
         throw new AppError("Ya existe una asignatura con ese nombre", 409)
     }
@@ -33,6 +42,7 @@ export const createAsignaturaService = async (usuarioId: string, nombre: string)
 // coincidir con el de otra asignatura.
 export const renameAsignaturaService = async (usuarioId: string, asignaturaId: string, nombre: string): Promise<IAsignatura> => {
 
+    validarNombre(nombre)
     const usuario = await buscarUsuario(usuarioId)
     const asignatura = buscarAsignatura(usuario, asignaturaId)
 
@@ -68,8 +78,13 @@ export const deleteAsignaturaService = async (usuarioId: string, asignaturaId: s
 // misma asignatura (sí puede repetirse en otra).
 export const createTemaService = async (usuarioId: string, asignaturaId: string, nombre: string): Promise<ITema> => {
 
+    validarNombre(nombre)
     const usuario = await buscarUsuario(usuarioId)
     const asignatura = buscarAsignatura(usuario, asignaturaId)
+
+    if (asignatura.temas.length >= TEMAS_POR_ASIGNATURA_MAX) {
+        throw new AppError(`Una asignatura no puede tener más de ${TEMAS_POR_ASIGNATURA_MAX} temas`, 400)
+    }
 
     if (asignatura.temas.some(t => mismoNombre(t.nombre, nombre))) {
         throw new AppError("Ya existe un tema con ese nombre en la asignatura", 409)
@@ -85,6 +100,7 @@ export const createTemaService = async (usuarioId: string, asignaturaId: string,
 // Sus cajas y tarjetas no cambian.
 export const renameTemaService = async (usuarioId: string, temaId: string, nombre: string): Promise<ITema> => {
 
+    validarNombre(nombre)
     const usuario = await buscarUsuario(usuarioId)
     const { asignatura, tema } = buscarTema(usuario, temaId)
 
@@ -106,6 +122,10 @@ export const moveTemaService = async (usuarioId: string, temaId: string, asignat
     const destino = buscarAsignatura(usuario, asignaturaDestinoId)
 
     if (origen._id.equals(destino._id)) return tema.toObject()
+
+    if (destino.temas.length >= TEMAS_POR_ASIGNATURA_MAX) {
+        throw new AppError(`Una asignatura no puede tener más de ${TEMAS_POR_ASIGNATURA_MAX} temas`, 400)
+    }
 
     if (destino.temas.some(t => mismoNombre(t.nombre, tema.nombre))) {
         throw new AppError(`Ya existe un tema llamado «${tema.nombre}» en «${destino.nombre}»`, 409)
@@ -132,38 +152,55 @@ export const deleteTemaService = async (usuarioId: string, temaId: string): Prom
     await eliminarRepasosDeTemas(usuarioId, [tema._id])
 }
 
-// Guarda una sesión de estudio del tema: aplica el algoritmo Leitner a sus cajas.
-export const guardarSesionService = async (usuarioId: string, temaId: string, cajasNuevas: ICaja[]): Promise<ITema> => {
+export interface RespuestaSesion {
+    _id: string
+    es_correcta: boolean
+}
 
-    if (!Array.isArray(cajasNuevas) || cajasNuevas.length !== 5) throw new AppError("Se esperan exactamente 5 cajas", 400)
+// Valida el cuerpo de una sesión: [{ _id, es_correcta }], con ids de tarjeta
+// válidos y respuestas booleanas.
+function leerRespuestas(respuestas: unknown): Map<string, boolean> {
+    if (!Array.isArray(respuestas)) throw new AppError("Se espera la lista de respuestas de la sesión", 400)
+
+    const porTarjeta = new Map<string, boolean>()
+    for (const r of respuestas) {
+        if (!r || typeof r !== 'object' || !isValidObjectId(r._id) || typeof r.es_correcta !== 'boolean') {
+            throw new AppError("Cada respuesta debe tener el _id de la tarjeta y es_correcta (true o false)", 400)
+        }
+        porTarjeta.set(String(r._id), r.es_correcta)
+    }
+    return porTarjeta
+}
+
+// Guarda una sesión de estudio del tema: aplica el algoritmo Leitner a sus cajas.
+// El cliente solo dice qué tarjetas acertó y cuáles falló; las tarjetas (texto,
+// imagen, nivel, fechas) se toman siempre de lo guardado. Las respuestas a
+// tarjetas que ya no están en el tema (p. ej. borradas mientras se estudiaba)
+// se ignoran, y las tarjetas sin respuesta se quedan como están.
+export const guardarSesionService = async (usuarioId: string, temaId: string, respuestas: unknown): Promise<ITema> => {
+
+    const porTarjeta = leerRespuestas(respuestas)
 
     const usuario = await buscarUsuario(usuarioId)
     const { tema } = buscarTema(usuario, temaId)
 
-    // La imagen de cada tarjeta la decide el servidor, no el cliente: se toma de la
-    // tarjeta guardada con el mismo _id. Así el cliente no puede perderla ni
-    // apuntar a imágenes de otro.
-    const imagenAnterior = new Map<string, Types.ObjectId | null>()
-    for (const caja of tema.cajas) {
-        for (const t of caja.tarjetas) imagenAnterior.set(t._id.toString(), t.imagen ?? null)
-    }
-    for (const caja of cajasNuevas) {
-        for (const t of caja?.tarjetas ?? []) {
-            t.imagen = (t._id && imagenAnterior.get(String(t._id))) || null
-        }
-    }
+    let aciertos = 0
+    let fallos = 0
+    const cajas = tema.cajas.map(caja => ({
+        nombre: caja.nombre,
+        tarjetas: caja.tarjetas.map(t => {
+            const tarjeta = t.toObject()
+            const respuesta = porTarjeta.get(tarjeta._id.toString())
+            tarjeta.es_correcta = respuesta ?? null
+            if (respuesta === true) aciertos++
+            if (respuesta === false) fallos++
+            return tarjeta
+        }),
+    }))
 
-    // Se cuenta antes de ordenar: el algoritmo vuelve es_correcta a null.
-    const { aciertos, fallos } = contarRespuestas(cajasNuevas)
-
-    tema.set({ cajas: ordenarTarjetasEnCajas({ cajas: cajasNuevas }) })
+    tema.set({ cajas: ordenarTarjetasEnCajas({ cajas }) })
     await usuario.save()
     await registrarRepaso(usuarioId, tema._id, aciertos, fallos)
-
-    // Imágenes de tarjetas que ya no están en el tema guardado.
-    const siguen = new Set(imagenesDeTema(tema))
-    const huerfanas = [...imagenAnterior.values()].map(id => id?.toString()).filter(id => id && !siguen.has(id))
-    await eliminarImagenesService(usuarioId, huerfanas)
 
     return tema.toObject()
 }

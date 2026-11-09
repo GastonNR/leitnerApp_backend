@@ -32,10 +32,10 @@ async function crearTemaConTarjetas(cantidad: number, asignatura = 'Inglés', te
 async function estudiar(temaId: string, respuestas: Array<boolean | null>, t = token) {
     const res = await api().get('/api/asignaturas').set(auth(t))
     const tema = res.body.flatMap((a: { temas: unknown[] }) => a.temas).find((x: { _id: string }) => x._id === temaId)
-    tema.cajas[0].tarjetas.forEach((tarjeta: { es_correcta: boolean | null }, i: number) => {
-        tarjeta.es_correcta = respuestas[i] ?? null
-    })
-    await api().put(`/api/temas/${temaId}/cajas`).set(auth(t)).send({ cajas: tema.cajas }).expect(200)
+    const enviadas = tema.cajas[0].tarjetas
+        .map((tarjeta: { _id: string }, i: number) => ({ _id: tarjeta._id, es_correcta: respuestas[i] ?? null }))
+        .filter((r: { es_correcta: boolean | null }) => r.es_correcta !== null)
+    await api().put(`/api/temas/${temaId}/cajas`).set(auth(t)).send({ respuestas: enviadas }).expect(200)
 }
 
 const historial = (query = '', t = token) => api().get(`/api/repasos${query}`).set(auth(t))
@@ -95,7 +95,7 @@ describe('historial de repasos', () => {
     it('cada usuario ve solo su historial', async () => {
         const { temaId } = await crearTemaConTarjetas(1)
         await estudiar(temaId, [true])
-        const tokenOtro = await registrarYLoguear({ nombre: 'otro', email: 'otro@example.com', password: 'clave' })
+        const tokenOtro = await registrarYLoguear({ nombre: 'otro', email: 'otro@example.com', password: 'clave-del-otro' })
 
         expect((await historial('', tokenOtro)).body).toEqual([])
     })

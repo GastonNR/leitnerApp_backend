@@ -163,7 +163,7 @@ const eliminarTema = async (req: Request<TemaParams>, res: Response): Promise<Re
     }
 }
 
-// PUT /api/temas/:temaId/cajas  { cajas }
+// PUT /api/temas/:temaId/cajas  { respuestas: [{ _id, es_correcta }] }
 // Guarda la sesión de estudio y reordena las tarjetas (algoritmo Leitner).
 const guardarSesion = async (req: Request<TemaParams, {}, GuardarSesionBody>, res: Response): Promise<Response> => {
 
@@ -173,7 +173,7 @@ const guardarSesion = async (req: Request<TemaParams, {}, GuardarSesionBody>, re
     if (!isValidObjectId(temaId)) return idInvalido(res, 'tema')
 
     try {
-        return res.status(200).json(await guardarSesionService(req.usuario.id, temaId, req.body?.cajas))
+        return res.status(200).json(await guardarSesionService(req.usuario.id, temaId, req.body?.respuestas))
     } catch (error) {
         return responderError(res, error, "Error al guardar la sesión")
     }

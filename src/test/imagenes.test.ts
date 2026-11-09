@@ -49,8 +49,8 @@ async function temasActuales() {
 }
 
 // Guarda una sesión de estudio del tema (como el botón del frontend).
-const guardarSesion = (tema: { _id: string, cajas: unknown[] }) =>
-    api().put(`/api/temas/${tema._id}/cajas`).set(auth(token)).send({ cajas: tema.cajas })
+const guardarSesion = (temaId: string, respuestas: Array<{ _id: string, es_correcta: boolean }>) =>
+    api().put(`/api/temas/${temaId}/cajas`).set(auth(token)).send({ respuestas })
 
 describe('detectarTipoImagen', () => {
     it('reconoce los formatos admitidos por su contenido', () => {
@@ -158,16 +158,11 @@ describe('GET /api/imagenes/:id', () => {
 
 describe('la imagen sigue a la tarjeta', () => {
 
-    it('sobrevive a una sesión de estudio aunque el cliente no la envíe', async () => {
+    it('sobrevive a una sesión de estudio', async () => {
         const tema = await crearTema()
         const { body: tarjeta } = await crearTarjetaConImagen(tema._id, PNG)
-        const [l] = await temasActuales()
 
-        const t = { ...l.cajas[0].tarjetas[0], es_correcta: true }
-        delete t.imagen
-        l.cajas[0].tarjetas = [t]
-
-        const res = await guardarSesion(l)
+        const res = await guardarSesion(tema._id, [{ _id: tarjeta._id, es_correcta: true }])
         expect(res.status).toBe(200)
         expect(res.body.cajas[1].tarjetas[0].imagen).toBe(tarjeta.imagen)
         expect(await Imagen.countDocuments()).toBe(1)
@@ -176,16 +171,13 @@ describe('la imagen sigue a la tarjeta', () => {
     it('el cliente no puede asignar a una tarjeta la imagen de otra', async () => {
         const tema = await crearTema()
         const { body: conImagen } = await crearTarjetaConImagen(tema._id, PNG)
-        await api().post(`/api/temas/${tema._id}/tarjetas`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
-        const [l] = await temasActuales()
+        const { body: sinImagen } = await api().post(`/api/temas/${tema._id}/tarjetas`).set(auth(token)).send({ pregunta: 'dog', respuesta: 'perro' })
 
-        l.cajas[0].tarjetas = l.cajas[0].tarjetas.map((t: { pregunta: string }) =>
-            t.pregunta === 'dog' ? { ...t, imagen: conImagen.imagen } : t
-        )
+        const res = await api().put(`/api/temas/${tema._id}/cajas`).set(auth(token))
+            .send({ respuestas: [{ _id: sinImagen._id, es_correcta: false, imagen: conImagen.imagen }] })
 
-        const res = await guardarSesion(l)
-        const sinImagen = res.body.cajas[0].tarjetas.find((t: { pregunta: string }) => t.pregunta === 'dog')
-        expect(sinImagen.imagen).toBeNull()
+        const guardada = res.body.cajas[0].tarjetas.find((t: { _id: string }) => t._id === sinImagen._id)
+        expect(guardada.imagen).toBeNull()
     })
 
     it('al borrar la tarjeta se borra su imagen', async () => {
@@ -221,14 +213,14 @@ describe('la imagen sigue a la tarjeta', () => {
         expect(await Imagen.countDocuments()).toBe(1)
     })
 
-    it('si el guardado de sesión quita una tarjeta, su imagen se borra', async () => {
+    it('una sesión no puede quitar tarjetas ni borrar sus imágenes', async () => {
         const tema = await crearTema()
         await crearTarjetaConImagen(tema._id, PNG)
-        const [l] = await temasActuales()
-        l.cajas[0].tarjetas = []
 
-        await guardarSesion(l).expect(200)
-        expect(await Imagen.countDocuments()).toBe(0)
+        await guardarSesion(tema._id, []).expect(200)
+        expect(await Imagen.countDocuments()).toBe(1)
+        const [l] = await temasActuales()
+        expect(l.cajas[0].tarjetas).toHaveLength(1)
     })
 })
 
@@ -355,8 +347,7 @@ describe('imagen de una tarjeta existente', () => {
     it('funciona con tarjetas que ya no están en la caja 1', async () => {
         const tarjeta = await tarjetaSinImagen()
         const [l] = await temasActuales()
-        l.cajas[0].tarjetas[0].es_correcta = true
-        await guardarSesion(l).expect(200)
+        await guardarSesion(l._id, [{ _id: tarjeta._id, es_correcta: true }]).expect(200)
 
         const res = await ponerImagen(tarjeta._id, PNG)
         expect(res.status).toBe(200)
@@ -477,8 +468,7 @@ describe('PATCH /api/tarjetas/:tarjetaId (editar tarjeta)', () => {
     it('edita tarjetas que ya no están en la caja 1, sin moverlas', async () => {
         const t = await tarjeta()
         const [l] = await temasActuales()
-        l.cajas[0].tarjetas[0].es_correcta = true
-        await guardarSesion(l).expect(200)
+        await guardarSesion(l._id, [{ _id: t._id, es_correcta: true }]).expect(200)
 
         await editar(t._id).send({ pregunta: 'cat', respuesta: 'gato' }).expect(200)
         const [despues] = await temasActuales()

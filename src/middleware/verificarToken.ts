@@ -17,7 +17,7 @@ const verificarToken = <P = Record<string, string>>(
     }
 
     try {
-        const payload = jwt.verify(token, env.jwtSecret) as JwtPayload
+        const payload = jwt.verify(token, env.jwtSecret, { algorithms: ['HS256'] }) as JwtPayload
         req.usuario = payload
         next()
 

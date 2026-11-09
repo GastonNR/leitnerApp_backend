@@ -1,6 +1,5 @@
 import { Types } from "mongoose"
 import Repaso from "../models/Repaso.js"
-import { ICaja } from "../types/models.types.js"
 
 export const DIAS_HISTORIAL_MAX = 365
 
@@ -9,19 +8,6 @@ export interface RepasoDTO {
     fecha: Date
     aciertos: number
     fallos: number
-}
-
-// Respuestas de una sesión, antes de que el algoritmo resetee es_correcta.
-export function contarRespuestas(cajas: ICaja[]): { aciertos: number, fallos: number } {
-    let aciertos = 0
-    let fallos = 0
-    for (const caja of cajas) {
-        for (const t of caja?.tarjetas ?? []) {
-            if (t.es_correcta === true) aciertos++
-            else if (t.es_correcta === false) fallos++
-        }
-    }
-    return { aciertos, fallos }
 }
 
 // Registra una sesión. Si falla no se propaga el error: la sesión ya se guardó

@@ -1,6 +1,7 @@
 import { isValidObjectId, Types } from "mongoose"
 import Imagen from "../models/Imagen.js"
 import Usuario from "../models/Usuarios.js"
+import { IMAGENES_BYTES_POR_USUARIO_MAX } from "../config/limites.js"
 import { AppError } from "../types/AppError.js"
 import { ITarjeta, TarjetaSubdocument, UsuarioDocument } from "../types/models.types.js"
 import { detectarTipoImagen, TipoImagen } from "../utils/detectarTipoImagen.js"
@@ -21,6 +22,15 @@ export const guardarImagenService = async (usuarioId: string, datos: Buffer): Pr
 
     const tipo = detectarTipoImagen(datos)
     if (!tipo) throw new AppError("Formato de imagen no soportado. Usa JPG, PNG, WebP o GIF.", 415)
+
+    // Espacio total del usuario en imágenes.
+    const [uso] = await Imagen.aggregate<{ total: number }>([
+        { $match: { usuario: new Types.ObjectId(usuarioId) } },
+        { $group: { _id: null, total: { $sum: '$tamano' } } },
+    ])
+    if ((uso?.total ?? 0) + datos.length > IMAGENES_BYTES_POR_USUARIO_MAX) {
+        throw new AppError("Llegaste al límite de espacio para imágenes. Borra algunas para subir más.", 413)
+    }
 
     const imagen = await Imagen.create({
         usuario: usuarioId,
