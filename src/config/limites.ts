@@ -15,4 +15,6 @@ export const TEMAS_POR_ASIGNATURA_MAX = 100
 export const TEXTO_TARJETA_MAX = 2000       // pregunta y respuesta, cada una
 export const TARJETAS_POR_USUARIO_MAX = 3000
 
-export const IMAGENES_BYTES_POR_USUARIO_MAX = 200 * 1024 * 1024
+// Total por usuario. Las imágenes llegan comprimidas (WebP, máx. 1280 px), unos
+// 100–300 KB cada una: alcanza para ~100 imágenes sin llenar una base gratuita.
+export const IMAGENES_BYTES_POR_USUARIO_MAX = 20 * 1024 * 1024
